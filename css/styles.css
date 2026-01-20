@@ -190,7 +190,7 @@ h4 {
 }
 
 .nav-btn,
-.tool-btn {
+.header-actions .tool-btn {
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
@@ -207,13 +207,13 @@ h4 {
 }
 
 .nav-btn:hover,
-.tool-btn:hover {
+.header-actions .tool-btn:hover {
     background: var(--color-bg-overlay);
     color: var(--color-primary);
 }
 
 .nav-btn.active,
-.tool-btn.active {
+.header-actions .tool-btn.active {
     background: var(--color-primary);
     color: var(--color-text-inverse);
 }
@@ -288,6 +288,41 @@ h4 {
     display: flex;
     align-items: center;
     gap: var(--spacing-xs);
+}
+
+.editor-tools .tool-btn,
+.zoom-controls .tool-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-light);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.editor-tools .tool-btn:hover,
+.zoom-controls .tool-btn:hover {
+    background: var(--color-bg-overlay);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+.editor-tools .tool-btn.active,
+.zoom-controls .tool-btn.active {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: var(--color-text-inverse);
+}
+
+.editor-tools .tool-btn svg,
+.zoom-controls .tool-btn svg {
+    width: 16px;
+    height: 16px;
 }
 
 .zoom-level {
@@ -1255,7 +1290,7 @@ h4 {
     }
 
     .nav-btn span,
-    .tool-btn span {
+    .header-actions .tool-btn span {
         display: none;
     }
 
@@ -1265,12 +1300,12 @@ h4 {
     }
 
     .nav-btn span,
-    .tool-btn span {
+    .header-actions .tool-btn span {
         display: none;
     }
 
     .nav-btn,
-    .tool-btn {
+    .header-actions .tool-btn {
         padding: var(--spacing-sm);
     }
 
@@ -2269,7 +2304,7 @@ h4 {
     .report-controls-bar,
     .no-print,
     .nav-btn,
-    .tool-btn,
+    .header-actions .tool-btn,
     .toast-container,
     .loading-overlay {
         display: none !important;
