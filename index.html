@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Territory Assignment Record - Chennai Urappakkam Congregation">
+    <title>Territory Map - Chennai Urappakkam</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;500;600;700&family=Source+Sans+3:wght@300;400;500;600&display=swap"
+        rel="stylesheet">
+    <!-- Firebase SDK (Compat) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="app-header">
+        <div class="header-content">
+            <div class="logo-section">
+                <h1 class="app-title">Territory Map</h1>
+                <span class="congregation-name">Chennai Urappakkam</span>
+            </div>
+            <nav class="main-nav">
+                <button class="nav-btn active" data-view="map">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon>
+                        <line x1="8" y1="2" x2="8" y2="18"></line>
+                        <line x1="16" y1="6" x2="16" y2="22"></line>
+                    </svg>
+                    <span>Map</span>
+                </button>
+                <button class="nav-btn" data-view="list">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="8" y1="6" x2="21" y2="6"></line>
+                        <line x1="8" y1="12" x2="21" y2="12"></line>
+                        <line x1="8" y1="18" x2="21" y2="18"></line>
+                        <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                        <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                        <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                    </svg>
+                    <span>List</span>
+                </button>
+                <button class="nav-btn hide-on-mobile" data-view="editor">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                    <span>Editor</span>
+                </button>
+                <button class="nav-btn" data-view="report">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                        <polyline points="10 9 9 9 8 9"></polyline>
+                    </svg>
+                    <span>Report</span>
+                </button>
+                <button class="nav-btn" data-view="groups" id="manageGroupsBtn">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="9" cy="7" r="4"></circle>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                    <span>Groups</span>
+                </button>
+            </nav>
+            <!-- Header actions removed - import/export no longer needed -->
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="app-main">
+        <!-- Map View -->
+        <section class="view-section map-view active" id="mapView">
+            <div class="map-toolbar">
+                <div class="zoom-controls">
+                    <button class="tool-btn" id="zoomIn" title="Zoom In">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            <line x1="11" y1="8" x2="11" y2="14"></line>
+                            <line x1="8" y1="11" x2="14" y2="11"></line>
+                        </svg>
+                    </button>
+                    <span class="zoom-level" id="zoomLevel">100%</span>
+                    <button class="tool-btn" id="zoomOut" title="Zoom Out">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            <line x1="8" y1="11" x2="14" y2="11"></line>
+                        </svg>
+                    </button>
+                    <button class="tool-btn" id="zoomFit" title="Fit to Screen">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path
+                                d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3">
+                            </path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="filter-controls">
+                    <label class="filter-label">Filter by Group:</label>
+                    <select class="group-filter" id="groupFilter">
+                        <option value="all">All Groups</option>
+                        <option value="Aadhanur">Aadhanur</option>
+                        <option value="Urapakkam">Urapakkam</option>
+                        <option value="Keerapakkam">Keerapakkam</option>
+                        <option value="Mahalakshmi Nagar">Mahalakshmi Nagar</option>
+                        <option value="Madambakkam">Madambakkam</option>
+                        <option value="Common">Common</option>
+                    </select>
+                </div>
+                <div class="filter-controls">
+                    <label class="filter-label">Color Mode:</label>
+                    <select class="group-filter" id="colorModeFilter">
+                        <option value="group">By Group</option>
+                        <option value="timeline">By Timeline</option>
+                        <option value="none">None</option>
+                    </select>
+                </div>
+                <div class="filter-controls">
+                    <label class="filter-label">Map Layer:</label>
+                    <select class="group-filter" id="mapLayerFilter">
+                        <option value="simple">Simple</option>
+                        <option value="earth">Earth</option>
+                    </select>
+                </div>
+                <div class="search-box">
+                    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <input type="text" class="search-input" id="territorySearch" placeholder="Search territory...">
+                </div>
+            </div>
+
+            <div class="map-container" id="mapContainer">
+                <div class="map-wrapper" id="mapWrapper">
+                    <div class="map-loader" id="mapLoader">
+                        <div class="map-loader-spinner"></div>
+                        <span class="map-loader-text">Loading map...</span>
+                    </div>
+                    <img class="map-background" id="mapBackground" srcset="images/background-mobile.png 800w,
+                                 images/background-tablet.png 1200w,
+                                 images/background-laptop.png 2560w,
+                                 images/background-desktop.png 3840w"
+                        sizes="(max-width: 800px) 800px, (max-width: 1200px) 1200px, (max-width: 2560px) 2560px, 3840px"
+                        src="images/background-laptop.png" alt="Territory Map Background" draggable="false">
+                    <svg class="territory-overlay" id="territoryOverlay">
+                        <!-- Territory polygons will be rendered here -->
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Territory Details Panel -->
+            <aside class="details-panel" id="detailsPanel">
+                <div class="panel-header">
+                    <h2 class="panel-title">Territory Details</h2>
+                    <button class="close-panel" id="closePanel">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                <div class="panel-content" id="panelContent">
+                    <p class="panel-placeholder">Click on a territory to view details</p>
+                </div>
+            </aside>
+        </section>
+
+        <!-- List View -->
+        <section class="view-section list-view" id="listView">
+            <div class="list-header">
+                <div class="list-filters">
+                    <div class="search-box">
+                        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                        <input type="text" class="search-input" id="listSearch" placeholder="Search territories...">
+                    </div>
+                    <select class="group-filter" id="listGroupFilter">
+                        <option value="all">All Groups</option>
+                        <option value="Aadhanur">Aadhanur</option>
+                        <option value="Urapakkam">Urapakkam</option>
+                        <option value="Keerapakkam">Keerapakkam</option>
+                        <option value="Mahalakshmi Nagar">Mahalakshmi Nagar</option>
+                        <option value="Madambakkam">Madambakkam</option>
+                        <option value="Common">Common</option>
+                    </select>
+                </div>
+                <div class="list-stats" id="listStats">
+                    <span class="stat-item">Total: <strong>107</strong></span>
+                </div>
+                <div class="list-actions">
+                    <button class="btn btn-primary" id="addTerritoryBtn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            style="width: 16px; height: 16px;">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Add Territory
+                    </button>
+                </div>
+            </div>
+            <div class="territory-list" id="territoryList">
+                <!-- Territory cards will be rendered here -->
+            </div>
+
+            <!-- List Details Panel (unified with map panel) -->
+            <aside class="details-panel list-details-panel" id="listDetailsPanel">
+                <div class="panel-header">
+                    <h2 class="panel-title">Territory Details</h2>
+                    <button class="close-panel" id="closeListPanel">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                <div class="panel-content" id="listPanelContent">
+                    <p class="panel-placeholder">Click on a territory to view details</p>
+                </div>
+            </aside>
+        </section>
+
+        <!-- Editor View -->
+        <section class="view-section editor-view" id="editorView">
+            <div class="editor-toolbar">
+                <div class="editor-tools">
+                    <button class="tool-btn active" id="selectTool" title="Select">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"></path>
+                        </svg>
+                    </button>
+                    <button class="tool-btn" id="drawTool" title="Draw Polygon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="12 2 2 7 2 17 12 22 22 17 22 7 12 2"></polygon>
+                        </svg>
+                    </button>
+                    <button class="tool-btn" id="editTool" title="Edit Vertices">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M12 2v4"></path>
+                            <path d="M12 18v4"></path>
+                            <path d="M2 12h4"></path>
+                            <path d="M18 12h4"></path>
+                        </svg>
+                    </button>
+                    <div class="tool-divider"></div>
+                    <button class="tool-btn" id="undoBtn" title="Undo">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="1 4 1 10 7 10"></polyline>
+                            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                        </svg>
+                    </button>
+                    <button class="tool-btn" id="redoBtn" title="Redo">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="editor-info">
+                    <span class="editor-status" id="editorStatus">Select a tool to begin</span>
+                </div>
+                <div class="editor-actions">
+                    <button class="btn btn-secondary" id="cancelEdit">Cancel</button>
+                    <button class="btn btn-primary" id="saveEdit">Save Changes</button>
+                </div>
+            </div>
+
+            <div class="editor-container">
+                <div class="editor-canvas-wrapper" id="editorCanvasWrapper">
+                    <img class="editor-background" id="editorBackground" src="images/background-laptop.png"
+                        alt="Territory Map" draggable="false">
+                    <svg class="editor-canvas" id="editorCanvas">
+                        <!-- Editable polygons will be rendered here -->
+                    </svg>
+                </div>
+
+                <aside class="editor-sidebar">
+                    <div class="sidebar-section">
+                        <h3 class="sidebar-title">Territory Assignment</h3>
+                        <div class="form-group">
+                            <label for="assignTerritory">Assign to Territory:</label>
+                            <select id="assignTerritory" class="form-select">
+                                <option value="">Select territory...</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="sidebar-section">
+                        <h3 class="sidebar-title">Polygon Info</h3>
+                        <div class="info-grid" id="polygonInfo">
+                            <div class="info-item">
+                                <span class="info-label">Vertices:</span>
+                                <span class="info-value" id="vertexCount">-</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Area:</span>
+                                <span class="info-value" id="polygonArea">-</span>
+                            </div>
+                        </div>
+                        <div class="editor-region-actions" id="regionActions" style="margin-top: 12px; display: none;">
+                            <button class="btn btn-danger btn-sm" id="deleteRegionBtn">
+                                🗑️ Delete Region
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="sidebar-section">
+                        <h3 class="sidebar-title">Unassigned Territories</h3>
+                        <div class="unassigned-list" id="unassignedList">
+                            <!-- List of territories without polygons -->
+                        </div>
+                    </div>
+                </aside>
+            </div>
+        </section>
+
+        <!-- Report View (S-13-E) -->
+        <section class="view-section report-view" id="reportView">
+            <div class="report-controls-bar no-print">
+                <div class="service-year-selector">
+                    <label for="serviceYear">Service Year:</label>
+                    <select id="serviceYear" class="form-select">
+                        <!-- Options will be populated by JS -->
+                    </select>
+                </div>
+                <button class="btn btn-primary" id="printReportBtn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        style="width: 16px; height: 16px;">
+                        <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                        <rect x="6" y="14" width="12" height="8"></rect>
+                    </svg>
+                    Print Report
+                </button>
+            </div>
+            <div class="report-print-area" id="reportPrintArea">
+                <div class="report-container" id="reportContainer">
+                    <!-- Report pages will be rendered by JS -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Groups View -->
+        <section class="view-section groups-view" id="groupsView">
+            <div class="groups-header-section">
+                <h2 class="view-title">Group Management</h2>
+                <p class="view-subtitle">Organize your territories into neighborhoods or sectors. Changes to group names
+                    or colors will reflect across all assigned territories.</p>
+            </div>
+
+            <div class="groups-view-container">
+                <div class="groups-card groups-list-card">
+                    <h3 class="card-subtitle">Available Groups</h3>
+                    <div class="groups-list-wrapper" id="groupsListItems">
+                        <!-- Group items will be rendered here -->
+                    </div>
+                </div>
+
+                <div class="groups-card groups-form-card">
+                    <h3 class="card-subtitle" id="groupFormTitle">Add New Group</h3>
+                    <form id="groupForm" class="groups-management-form">
+                        <input type="hidden" id="editGroupId">
+                        <div class="form-group">
+                            <label for="groupNameInput">Group Name:</label>
+                            <input type="text" id="groupNameInput" class="form-input" required
+                                placeholder="e.g. Kolapakkam">
+                        </div>
+                        <div class="form-group">
+                            <label for="groupColorInput">Group Color:</label>
+                            <div class="color-input-wrapper">
+                                <input type="color" id="groupColorInput" class="form-input-color" value="#E8E0D0">
+                                <input type="text" id="groupColorHexInput" class="form-input hex-input"
+                                    placeholder="#HEX" maxlength="7">
+                            </div>
+                        </div>
+                        <div class="groups-form-actions">
+                            <button type="button" class="btn btn-secondary" id="resetGroupFormBtn">Clear Form</button>
+                            <button type="submit" class="btn btn-primary" id="saveGroupBtn">Add Group</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Login Page -->
+    <div class="login-overlay active" id="loginOverlay">
+        <div class="login-container">
+            <h1 class="login-title">Territory Map</h1>
+            <p class="login-subtitle">Chennai Urappakkam Congregation</p>
+            <form id="loginForm">
+                <div class="form-group">
+                    <input type="password" id="loginPassword" class="form-input" placeholder="Enter Password" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">Login</button>
+                <p class="login-error" id="loginError">Invalid password</p>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <p class="loading-text">Loading territories...</p>
+    </div>
+
+    <!-- Territory Modal -->
+    <div class="modal-overlay" id="territoryModal">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2 class="modal-title" id="modalTitle">Add Territory</h2>
+                <button class="close-modal" id="closeModal">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="territoryForm">
+                    <input type="hidden" id="editTerritoryId">
+                    <div class="form-group">
+                        <label for="territoryNumber">Territory Number (Display):</label>
+                        <input type="text" id="territoryNumberInput" class="form-input" required
+                            placeholder="e.g. 1, 1A, 101">
+                        <small class="form-hint">This is the number shown on maps and reports</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="territoryName">Territory Name:</label>
+                        <input type="text" id="territoryNameInput" class="form-input" required
+                            placeholder="e.g. Madhavammal St">
+                    </div>
+                    <div class="form-group">
+                        <label for="territoryGroup">Group:</label>
+                        <select id="territoryGroupInput" class="form-select" required>
+                            <option value="Aadhanur">Aadhanur</option>
+                            <option value="Urapakkam">Urapakkam</option>
+                            <option value="Keerapakkam">Keerapakkam</option>
+                            <option value="Mahalakshmi Nagar">Mahalakshmi Nagar</option>
+                            <option value="Madambakkam">Madambakkam</option>
+                            <option value="Common">Common</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="territoryDescription">Territory Description:</label>
+                        <textarea id="territoryDescriptionInput" class="form-input" rows="3"
+                            placeholder="Add territory description..."></textarea>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" id="cancelTerritoryBtn">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Territory</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Assignment Modal -->
+    <div class="modal-overlay" id="assignmentModal">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2 class="modal-title" id="assignmentModalTitle">Add Assignment Record</h2>
+                <button class="close-modal" id="closeAssignmentModal">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="assignmentForm">
+                    <input type="hidden" id="assignmentTerritoryId">
+                    <input type="hidden" id="editAssignmentId">
+
+                    <div class="form-group">
+                        <label for="publisherName">Publisher Name:</label>
+                        <input type="text" id="publisherName" class="form-input" required placeholder="Publisher Name">
+                    </div>
+
+                    <div class="info-grid">
+                        <div class="form-group">
+                            <label for="dateAssigned">Date Assigned:</label>
+                            <input type="date" id="dateAssigned" class="form-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="dateCompleted">Date Completed:</label>
+                            <input type="date" id="dateCompleted" class="form-input">
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" id="cancelAssignmentBtn">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Record</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+
+    <script src="js/storage.js"></script>
+    <script src="js/data.js"></script>
+    <script src="js/map.js"></script>
+    <script src="js/editor.js"></script>
+    <script src="js/app.js"></script>
+</body>
+
+</html>

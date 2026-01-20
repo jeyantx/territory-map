@@ -1,0 +1,10 @@
+
+.DS_Store
+.idea/
+.vscode/
+*.log
+__pycache__/
+*.pyc
+
+# Too large for GitHub (>100MB)
+images/final_high_res_map.jpg
