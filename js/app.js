@@ -121,270 +121,272 @@ class App {
             localStorage.setItem('territory_last_login', Date.now().toString());
             return true;
         }
+        return false;
+    }
 
-        /**
-         * Logout
-         */
-        logout() {
-            this.isAuthenticated = false;
-            localStorage.removeItem('territory_auth');
-            localStorage.removeItem('territory_last_login');
-            window.location.reload();
-        }
+    /**
+     * Logout
+     */
+    logout() {
+        this.isAuthenticated = false;
+        localStorage.removeItem('territory_auth');
+        localStorage.removeItem('territory_last_login');
+        window.location.reload();
+    }
 
-        /**
-         * Setup mobile restriction
-         */
-        setupMobileRestriction() {
-            const isMobile = window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    /**
+     * Setup mobile restriction
+     */
+    setupMobileRestriction() {
+        const isMobile = window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
-            if (isMobile) {
-                const restrictionOverlay = document.createElement('div');
-                restrictionOverlay.className = 'mobile-restriction-overlay';
-                restrictionOverlay.innerHTML = `
+        if (isMobile) {
+            const restrictionOverlay = document.createElement('div');
+            restrictionOverlay.className = 'mobile-restriction-overlay';
+            restrictionOverlay.innerHTML = `
                 <div class="restriction-content">
                     <div class="restriction-icon">💻</div>
                     <h2>Desktop Required</h2>
                     <p>For the best experience while managing territory maps and boundaries, please use a desktop or laptop system.</p>
                 </div>
             `;
-                document.body.appendChild(restrictionOverlay);
+            document.body.appendChild(restrictionOverlay);
+        }
+    }
+
+    /**
+     * Setup event listeners
+     */
+    setupEventListeners() {
+        // Navigation
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const view = btn.dataset.view;
+                this.switchView(view);
+            });
+        });
+
+        // List view search and filter
+        document.getElementById('listSearch')?.addEventListener('input', (e) => {
+            this.filterListView(e.target.value, document.getElementById('listGroupFilter')?.value);
+        });
+
+        document.getElementById('listGroupFilter')?.addEventListener('change', (e) => {
+            this.filterListView(document.getElementById('listSearch')?.value, e.target.value);
+        });
+
+        // Map color mode
+        document.getElementById('colorModeFilter')?.addEventListener('change', (e) => {
+            if (territoryMap) {
+                territoryMap.setColorMode(e.target.value);
             }
+        });
+
+        // Map layer (Simple vs Earth)
+        document.getElementById('mapLayerFilter')?.addEventListener('change', (e) => {
+            if (territoryMap) {
+                territoryMap.setMapLayer(e.target.value);
+            }
+        });
+
+        // Territory CRUD
+        document.getElementById('addTerritoryBtn')?.addEventListener('click', () => {
+            this.openTerritoryModal();
+        });
+
+        document.getElementById('closeModal')?.addEventListener('click', () => {
+            this.closeTerritoryModal();
+        });
+
+        document.getElementById('cancelTerritoryBtn')?.addEventListener('click', () => {
+            this.closeTerritoryModal();
+        });
+
+        document.getElementById('territoryForm')?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.handleTerritorySubmit();
+        });
+
+        // Window resize
+        window.addEventListener('resize', () => {
+            if (this.currentView === 'map' && territoryMap) {
+                territoryMap.handleResize();
+            }
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            this.handleKeyboardShortcuts(e);
+        });
+
+        // Close list details panel
+        document.getElementById('closeListPanel')?.addEventListener('click', () => {
+            this.closeListDetailsPanel();
+        });
+
+        // Report view
+        document.getElementById('printReportBtn')?.addEventListener('click', () => {
+            window.print();
+        });
+
+        document.getElementById('serviceYear')?.addEventListener('change', (e) => {
+            this.renderReport(e.target.value);
+        });
+
+        // Backup & Logout
+        document.getElementById('backupToolsBtn')?.addEventListener('click', () => {
+            if (confirm('Do you want to export all data for backup?')) {
+                storage.exportData();
+            }
+        });
+
+        document.getElementById('logoutBtn')?.addEventListener('click', () => {
+            if (confirm('Are you sure you want to logout?')) {
+                this.logout();
+            }
+        });
+
+        // Add Import Button handling (hidden input)
+        let importInput = document.getElementById('importDataInput');
+        if (!importInput) {
+            importInput = document.createElement('input');
+            importInput.type = 'file';
+            importInput.accept = '.json';
+            importInput.style.display = 'none';
+            importInput.id = 'importDataInput';
+            document.body.appendChild(importInput);
         }
 
-        /**
-         * Setup event listeners
-         */
-        setupEventListeners() {
-            // Navigation
-            document.querySelectorAll('.nav-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const view = btn.dataset.view;
-                    this.switchView(view);
-                });
-            });
-
-            // List view search and filter
-            document.getElementById('listSearch')?.addEventListener('input', (e) => {
-                this.filterListView(e.target.value, document.getElementById('listGroupFilter')?.value);
-            });
-
-            document.getElementById('listGroupFilter')?.addEventListener('change', (e) => {
-                this.filterListView(document.getElementById('listSearch')?.value, e.target.value);
-            });
-
-            // Map color mode
-            document.getElementById('colorModeFilter')?.addEventListener('change', (e) => {
-                if (territoryMap) {
-                    territoryMap.setColorMode(e.target.value);
+        importInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                // Check password
+                const password = prompt("Enter password to import data:");
+                if (password === "343434") {
+                    this.showLoading(true);
+                    storage.importData(file).then(() => {
+                        this.showLoading(false);
+                        this.showToast('Data imported successfully. Refreshing...', 'success');
+                        setTimeout(() => window.location.reload(), 1500);
+                    }).catch(err => {
+                        this.showLoading(false);
+                        this.showToast('Import failed: ' + err.message, 'error');
+                    });
+                } else if (password) {
+                    alert("Incorrect password");
                 }
-            });
-
-            // Map layer (Simple vs Earth)
-            document.getElementById('mapLayerFilter')?.addEventListener('change', (e) => {
-                if (territoryMap) {
-                    territoryMap.setMapLayer(e.target.value);
-                }
-            });
-
-            // Territory CRUD
-            document.getElementById('addTerritoryBtn')?.addEventListener('click', () => {
-                this.openTerritoryModal();
-            });
-
-            document.getElementById('closeModal')?.addEventListener('click', () => {
-                this.closeTerritoryModal();
-            });
-
-            document.getElementById('cancelTerritoryBtn')?.addEventListener('click', () => {
-                this.closeTerritoryModal();
-            });
-
-            document.getElementById('territoryForm')?.addEventListener('submit', (e) => {
-                e.preventDefault();
-                this.handleTerritorySubmit();
-            });
-
-            // Window resize
-            window.addEventListener('resize', () => {
-                if (this.currentView === 'map' && territoryMap) {
-                    territoryMap.handleResize();
-                }
-            });
-
-            // Keyboard shortcuts
-            document.addEventListener('keydown', (e) => {
-                this.handleKeyboardShortcuts(e);
-            });
-
-            // Close list details panel
-            document.getElementById('closeListPanel')?.addEventListener('click', () => {
-                this.closeListDetailsPanel();
-            });
-
-            // Report view
-            document.getElementById('printReportBtn')?.addEventListener('click', () => {
-                window.print();
-            });
-
-            document.getElementById('serviceYear')?.addEventListener('change', (e) => {
-                this.renderReport(e.target.value);
-            });
-
-            // Backup & Logout
-            document.getElementById('backupToolsBtn')?.addEventListener('click', () => {
-                if (confirm('Do you want to export all data for backup?')) {
-                    storage.exportData();
-                }
-            });
-
-            document.getElementById('logoutBtn')?.addEventListener('click', () => {
-                if (confirm('Are you sure you want to logout?')) {
-                    this.logout();
-                }
-            });
-
-            // Add Import Button handling (hidden input)
-            let importInput = document.getElementById('importDataInput');
-            if (!importInput) {
-                importInput = document.createElement('input');
-                importInput.type = 'file';
-                importInput.accept = '.json';
-                importInput.style.display = 'none';
-                importInput.id = 'importDataInput';
-                document.body.appendChild(importInput);
             }
+            // Reset input
+            e.target.value = '';
+        });
 
-            importInput.addEventListener('change', (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                    // Check password
-                    const password = prompt("Enter password to import data:");
-                    if (password === "343434") {
-                        this.showLoading(true);
-                        storage.importData(file).then(() => {
-                            this.showLoading(false);
-                            this.showToast('Data imported successfully. Refreshing...', 'success');
-                            setTimeout(() => window.location.reload(), 1500);
-                        }).catch(err => {
-                            this.showLoading(false);
-                            this.showToast('Import failed: ' + err.message, 'error');
-                        });
-                    } else if (password) {
-                        alert("Incorrect password");
-                    }
+        // Right click on backup button to trigger import
+        document.getElementById('backupToolsBtn')?.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            importInput.click();
+        });
+    }
+
+    /**
+     * Setup Group Management UI
+     */
+    setupGroupManagement() {
+        const form = document.getElementById('groupForm');
+        const resetBtn = document.getElementById('resetGroupFormBtn');
+
+        resetBtn?.addEventListener('click', () => {
+            form.reset();
+            document.getElementById('editGroupId').value = '';
+            document.getElementById('saveGroupBtn').textContent = 'Add Group';
+            document.getElementById('groupFormTitle').textContent = 'Add New Group';
+        });
+
+        form?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('editGroupId').value;
+            const name = document.getElementById('groupNameInput').value;
+            const color = document.getElementById('groupColorInput').value;
+
+            try {
+                if (id) {
+                    await territoryData.updateGroup(id, { name, color });
+                    this.showToast('Group updated');
+                } else {
+                    await territoryData.addGroup({ name, color });
+                    this.showToast('Group added');
                 }
-                // Reset input
-                e.target.value = '';
-            });
-
-            // Right click on backup button to trigger import
-            document.getElementById('backupToolsBtn')?.addEventListener('contextmenu', (e) => {
-                e.preventDefault();
-                importInput.click();
-            });
-        }
-
-        /**
-         * Setup Group Management UI
-         */
-        setupGroupManagement() {
-            const form = document.getElementById('groupForm');
-            const resetBtn = document.getElementById('resetGroupFormBtn');
-
-            resetBtn?.addEventListener('click', () => {
                 form.reset();
                 document.getElementById('editGroupId').value = '';
                 document.getElementById('saveGroupBtn').textContent = 'Add Group';
-                document.getElementById('groupFormTitle').textContent = 'Add New Group';
-            });
+                this.renderGroupsManager();
+                this.populateGroupSelects();
+            } catch (err) {
+                this.showToast(err.message, 'error');
+            }
+        });
 
-            form?.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const id = document.getElementById('editGroupId').value;
-                const name = document.getElementById('groupNameInput').value;
-                const color = document.getElementById('groupColorInput').value;
+        // Sync color input and hex text
+        const colorInput = document.getElementById('groupColorInput');
+        const hexInput = document.getElementById('groupColorHexInput');
 
-                try {
-                    if (id) {
-                        await territoryData.updateGroup(id, { name, color });
-                        this.showToast('Group updated');
-                    } else {
-                        await territoryData.addGroup({ name, color });
-                        this.showToast('Group added');
-                    }
-                    form.reset();
-                    document.getElementById('editGroupId').value = '';
-                    document.getElementById('saveGroupBtn').textContent = 'Add Group';
-                    this.renderGroupsManager();
-                    this.populateGroupSelects();
-                } catch (err) {
-                    this.showToast(err.message, 'error');
-                }
-            });
+        colorInput?.addEventListener('input', (e) => hexInput.value = e.target.value.toUpperCase());
+        hexInput?.addEventListener('input', (e) => {
+            if (/^#[0-9A-F]{6}$/i.test(e.target.value)) {
+                colorInput.value = e.target.value;
+            }
+        });
+    }
 
-            // Sync color input and hex text
-            const colorInput = document.getElementById('groupColorInput');
-            const hexInput = document.getElementById('groupColorHexInput');
+    /**
+     * Populate group selects
+     */
+    populateGroupSelects() {
+        const groups = territoryData.getAllGroups();
+        const selects = [
+            { id: 'groupFilter', type: 'filter' },
+            { id: 'listGroupFilter', type: 'filter' },
+            { id: 'territoryGroupInput', type: 'form' },
+            { id: 'assignTerritory', type: 'editor' }
+        ];
 
-            colorInput?.addEventListener('input', (e) => hexInput.value = e.target.value.toUpperCase());
-            hexInput?.addEventListener('input', (e) => {
-                if (/^#[0-9A-F]{6}$/i.test(e.target.value)) {
-                    colorInput.value = e.target.value;
-                }
-            });
-        }
+        selects.forEach(item => {
+            const select = document.getElementById(item.id);
+            if (!select) return;
 
-        /**
-         * Populate group selects
-         */
-        populateGroupSelects() {
-            const groups = territoryData.getAllGroups();
-            const selects = [
-                { id: 'groupFilter', type: 'filter' },
-                { id: 'listGroupFilter', type: 'filter' },
-                { id: 'territoryGroupInput', type: 'form' },
-                { id: 'assignTerritory', type: 'editor' }
-            ];
+            const currentValue = select.value;
+            let options = '';
 
-            selects.forEach(item => {
-                const select = document.getElementById(item.id);
-                if (!select) return;
-
-                const currentValue = select.value;
-                let options = '';
-
-                if (item.type === 'filter') {
-                    options = '<option value="all">All Groups</option>';
-                } else if (item.type === 'form') {
-                    options = '<option value="">Select group...</option>';
-                } else if (item.type === 'editor') {
-                    // Done by editor.js
-                    return;
-                }
-
-                options += groups.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
-                select.innerHTML = options;
-
-                // Try to restore selection
-                if (currentValue) select.value = currentValue;
-            });
-        }
-
-        /**
-         * Render groups list in manager
-         */
-        renderGroupsManager() {
-            const container = document.getElementById('groupsListItems');
-            if (!container) return;
-
-            const groups = territoryData.getAllGroups();
-            if (groups.length === 0) {
-                container.innerHTML = '<p class="text-muted">No groups created yet. Use the form to add one.</p>';
+            if (item.type === 'filter') {
+                options = '<option value="all">All Groups</option>';
+            } else if (item.type === 'form') {
+                options = '<option value="">Select group...</option>';
+            } else if (item.type === 'editor') {
+                // Done by editor.js
                 return;
             }
 
-            container.innerHTML = groups.map(g => `
+            options += groups.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
+            select.innerHTML = options;
+
+            // Try to restore selection
+            if (currentValue) select.value = currentValue;
+        });
+    }
+
+    /**
+     * Render groups list in manager
+     */
+    renderGroupsManager() {
+        const container = document.getElementById('groupsListItems');
+        if (!container) return;
+
+        const groups = territoryData.getAllGroups();
+        if (groups.length === 0) {
+            container.innerHTML = '<p class="text-muted">No groups created yet. Use the form to add one.</p>';
+            return;
+        }
+
+        container.innerHTML = groups.map(g => `
             <div class="group-manager-item">
                 <div class="group-info-main">
                     <div class="group-swatch" style="background: ${g.color}"></div>
@@ -396,138 +398,138 @@ class App {
                 </div>
             </div>
         `).join('');
-        }
+    }
 
-        editGroup(id, name, color) {
-            document.getElementById('editGroupId').value = id;
-            document.getElementById('groupNameInput').value = name;
-            document.getElementById('groupColorInput').value = color;
-            document.getElementById('groupColorHexInput').value = color.toUpperCase();
-            document.getElementById('saveGroupBtn').textContent = 'Update Group';
-            document.getElementById('groupFormTitle').textContent = 'Edit Group';
-            // Scroll form into view on mobile
-            if (window.innerWidth <= 900) {
-                document.querySelector('.groups-form-card').scrollIntoView({ behavior: 'smooth' });
-            }
+    editGroup(id, name, color) {
+        document.getElementById('editGroupId').value = id;
+        document.getElementById('groupNameInput').value = name;
+        document.getElementById('groupColorInput').value = color;
+        document.getElementById('groupColorHexInput').value = color.toUpperCase();
+        document.getElementById('saveGroupBtn').textContent = 'Update Group';
+        document.getElementById('groupFormTitle').textContent = 'Edit Group';
+        // Scroll form into view on mobile
+        if (window.innerWidth <= 900) {
+            document.querySelector('.groups-form-card').scrollIntoView({ behavior: 'smooth' });
         }
+    }
 
     async deleteGroup(id) {
-            if (!confirm('Are you sure? Groups containing territories cannot be deleted.')) return;
-            try {
-                await territoryData.deleteGroup(id);
-                this.showToast('Group deleted');
+        if (!confirm('Are you sure? Groups containing territories cannot be deleted.')) return;
+        try {
+            await territoryData.deleteGroup(id);
+            this.showToast('Group deleted');
+            this.renderGroupsManager();
+            this.populateGroupSelects();
+        } catch (err) {
+            this.showToast(err.message, 'error');
+        }
+    }
+
+    /**
+     * Switch view
+     */
+    switchView(view) {
+        this.currentView = view;
+
+        // Update nav buttons
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.view === view);
+        });
+
+        // Update view sections
+        document.querySelectorAll('.view-section').forEach(section => {
+            section.classList.remove('active');
+        });
+
+        const viewElement = document.getElementById(`${view}View`);
+        if (viewElement) {
+            viewElement.classList.add('active');
+        }
+
+        // View-specific actions
+        switch (view) {
+            case 'map':
+                if (territoryMap) {
+                    territoryMap.handleResize();
+                    territoryMap.render();
+                }
+                break;
+            case 'list':
+                this.renderListView();
+                break;
+            case 'editor':
+                if (territoryEditor) {
+                    territoryEditor.render();
+                    territoryEditor.updateUnassignedList();
+                }
+                break;
+            case 'report':
+                this.setupReportView();
+                break;
+            case 'groups':
                 this.renderGroupsManager();
-                this.populateGroupSelects();
-            } catch (err) {
-                this.showToast(err.message, 'error');
-            }
+                break;
         }
+    }
 
-        /**
-         * Switch view
-         */
-        switchView(view) {
-            this.currentView = view;
+    /**
+     * Render list view
+     */
+    renderListView() {
+        const listContainer = document.getElementById('territoryList');
+        const statsElement = document.getElementById('listStats');
 
-            // Update nav buttons
-            document.querySelectorAll('.nav-btn').forEach(btn => {
-                btn.classList.toggle('active', btn.dataset.view === view);
-            });
+        if (!listContainer) return;
 
-            // Update view sections
-            document.querySelectorAll('.view-section').forEach(section => {
-                section.classList.remove('active');
-            });
+        const territories = territoryData.getAllTerritories();
+        const stats = territoryData.getStats();
 
-            const viewElement = document.getElementById(`${view}View`);
-            if (viewElement) {
-                viewElement.classList.add('active');
-            }
-
-            // View-specific actions
-            switch (view) {
-                case 'map':
-                    if (territoryMap) {
-                        territoryMap.handleResize();
-                        territoryMap.render();
-                    }
-                    break;
-                case 'list':
-                    this.renderListView();
-                    break;
-                case 'editor':
-                    if (territoryEditor) {
-                        territoryEditor.render();
-                        territoryEditor.updateUnassignedList();
-                    }
-                    break;
-                case 'report':
-                    this.setupReportView();
-                    break;
-                case 'groups':
-                    this.renderGroupsManager();
-                    break;
-            }
-        }
-
-        /**
-         * Render list view
-         */
-        renderListView() {
-            const listContainer = document.getElementById('territoryList');
-            const statsElement = document.getElementById('listStats');
-
-            if (!listContainer) return;
-
-            const territories = territoryData.getAllTerritories();
-            const stats = territoryData.getStats();
-
-            // Update stats
-            if (statsElement) {
-                statsElement.innerHTML = `
+        // Update stats
+        if (statsElement) {
+            statsElement.innerHTML = `
                 <span class="stat-item">Total: <strong>${stats.total}</strong></span>
                 <span class="stat-item">With Boundaries: <strong>${stats.withPolygons}</strong></span>
                 <span class="stat-item">Missing: <strong>${stats.withoutPolygons}</strong></span>
             `;
-            }
-
-            // Render cards
-            this.renderTerritoryCards(territories);
         }
 
-        /**
-         * Render territory cards
-         */
-        renderTerritoryCards(territories) {
-            const listContainer = document.getElementById('territoryList');
-            if (!listContainer) return;
+        // Render cards
+        this.renderTerritoryCards(territories);
+    }
 
-            if (territories.length === 0) {
-                listContainer.innerHTML = `
+    /**
+     * Render territory cards
+     */
+    renderTerritoryCards(territories) {
+        const listContainer = document.getElementById('territoryList');
+        if (!listContainer) return;
+
+        if (territories.length === 0) {
+            listContainer.innerHTML = `
                 <div class="empty-state">
                     <p class="text-muted">No territories found matching your criteria.</p>
                 </div>
             `;
-                return;
-            }
+            return;
+        }
 
-            listContainer.innerHTML = territories.map(territory => {
-                const displayNumber = territory.number || territory.id;
-                const assignments = territory.assignments || [];
+        listContainer.innerHTML = territories.map(territory => {
+            const displayNumber = territory.number || territory.id;
+            const assignments = territory.assignments || [];
 
-                // Resolve group info
-                const group = territoryData.getGroup(territory.groupId || territory.group);
-                const groupName = group ? group.name : (territory.group || 'Unassigned');
-                const groupColor = group ? group.color : '#ccc';
-                const groupSafeName = groupName.toLowerCase().replace(/\s+/g, '-');
+            // Resolve group info
+            const group = territoryData.getGroup(territory.groupId || territory.group);
+            const groupName = group ? group.name : (territory.group || 'Unassigned');
+            const groupColor = group ? group.color : '#ccc';
+            const groupSafeName = groupName.toLowerCase().replace(/\s+/g, '-');
 
-                // Sort by completion date descending
-                const sortedAssignments = [...assignments].sort((a, b) =>
-                    new Date(b.dateCompleted || b.dateAssigned || 0) - new Date(a.dateCompleted || a.dateAssigned || 0)
-                );
-                const lastAssignment = sortedAssignments[0];
+            // Sort by completion date descending
+            const sortedAssignments = [...assignments].sort((a, b) =>
+                new Date(b.dateCompleted || b.dateAssigned || 0) - new Date(a.dateCompleted || a.dateAssigned || 0)
+            );
+            const lastAssignment = sortedAssignments[0];
 
-                return `
+            return `
                 <div class="territory-card" data-id="${territory.id}" data-group="${groupName}">
                     <div class="card-header">
                         <span class="card-number" style="background: ${groupColor}">${displayNumber}</span>
@@ -551,209 +553,209 @@ class App {
                     ${territory.description ? `<div class="card-description">${territory.description}</div>` : ''}
                 </div>
             `;
-            }).join('');
+        }).join('');
 
-            // Add click handlers
-            listContainer.querySelectorAll('.territory-card').forEach(card => {
-                card.addEventListener('click', (e) => {
-                    // Don't trigger if action button was clicked
-                    if (e.target.closest('.card-actions')) return;
+        // Add click handlers
+        listContainer.querySelectorAll('.territory-card').forEach(card => {
+            card.addEventListener('click', (e) => {
+                // Don't trigger if action button was clicked
+                if (e.target.closest('.card-actions')) return;
 
-                    const id = parseInt(card.dataset.id);
-                    this.showListDetailPanel(id);
-                });
+                const id = parseInt(card.dataset.id);
+                this.showListDetailPanel(id);
             });
+        });
 
-            // View details handlers
-            listContainer.querySelectorAll('.view-territory').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const id = parseInt(btn.dataset.id);
-                    this.showListDetailPanel(id);
-                });
+        // View details handlers
+        listContainer.querySelectorAll('.view-territory').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const id = parseInt(btn.dataset.id);
+                this.showListDetailPanel(id);
             });
+        });
 
-            // Edit/Delete handlers
-            listContainer.querySelectorAll('.edit-territory').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const id = parseInt(btn.dataset.id);
-                    this.openTerritoryModal(id);
-                });
+        // Edit/Delete handlers
+        listContainer.querySelectorAll('.edit-territory').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const id = parseInt(btn.dataset.id);
+                this.openTerritoryModal(id);
             });
+        });
 
-            listContainer.querySelectorAll('.delete-territory').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const id = parseInt(btn.dataset.id);
-                    this.handleDeleteTerritory(id);
-                });
+        listContainer.querySelectorAll('.delete-territory').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const id = parseInt(btn.dataset.id);
+                this.handleDeleteTerritory(id);
             });
-        }
+        });
+    }
 
-        /**
-         * Open territory modal
-         */
-        openTerritoryModal(territoryId = null) {
-            const modal = document.getElementById('territoryModal');
-            const form = document.getElementById('territoryForm');
-            const title = document.getElementById('modalTitle');
-            const numberInput = document.getElementById('territoryNumberInput');
+    /**
+     * Open territory modal
+     */
+    openTerritoryModal(territoryId = null) {
+        const modal = document.getElementById('territoryModal');
+        const form = document.getElementById('territoryForm');
+        const title = document.getElementById('modalTitle');
+        const numberInput = document.getElementById('territoryNumberInput');
 
-            form.reset();
-            document.getElementById('editTerritoryId').value = territoryId || '';
+        form.reset();
+        document.getElementById('editTerritoryId').value = territoryId || '';
 
-            if (territoryId) {
-                title.textContent = 'Edit Territory';
-                const territory = territoryData.getTerritory(territoryId);
-                if (territory) {
-                    numberInput.value = territory.number || territory.id;
-                    document.getElementById('territoryNameInput').value = territory.name;
-                    document.getElementById('territoryGroupInput').value = territory.groupId || '';
-                    document.getElementById('territoryDescriptionInput').value = territory.description || '';
-                }
-            } else {
-                title.textContent = 'Add Territory';
-                // Auto-calculate next number
-                const territories = territoryData.getAllTerritories();
-                const maxNum = territories.reduce((max, t) => {
-                    const num = parseInt(t.number || t.id) || 0;
-                    return Math.max(max, num);
-                }, 0);
-                numberInput.value = maxNum + 1;
+        if (territoryId) {
+            title.textContent = 'Edit Territory';
+            const territory = territoryData.getTerritory(territoryId);
+            if (territory) {
+                numberInput.value = territory.number || territory.id;
+                document.getElementById('territoryNameInput').value = territory.name;
+                document.getElementById('territoryGroupInput').value = territory.groupId || '';
+                document.getElementById('territoryDescriptionInput').value = territory.description || '';
             }
-
-            modal.classList.add('active');
+        } else {
+            title.textContent = 'Add Territory';
+            // Auto-calculate next number
+            const territories = territoryData.getAllTerritories();
+            const maxNum = territories.reduce((max, t) => {
+                const num = parseInt(t.number || t.id) || 0;
+                return Math.max(max, num);
+            }, 0);
+            numberInput.value = maxNum + 1;
         }
 
-        /**
-         * Close territory modal
-         */
-        closeTerritoryModal() {
-            document.getElementById('territoryModal').classList.remove('active');
-        }
+        modal.classList.add('active');
+    }
+
+    /**
+     * Close territory modal
+     */
+    closeTerritoryModal() {
+        document.getElementById('territoryModal').classList.remove('active');
+    }
 
     /**
      * Handle territory form submission
      */
     async handleTerritorySubmit() {
-            const editId = document.getElementById('editTerritoryId').value;
-            const number = document.getElementById('territoryNumberInput').value.trim();
-            const name = document.getElementById('territoryNameInput').value;
-            const group = document.getElementById('territoryGroupInput').value;
-            const description = document.getElementById('territoryDescriptionInput').value;
+        const editId = document.getElementById('editTerritoryId').value;
+        const number = document.getElementById('territoryNumberInput').value.trim();
+        const name = document.getElementById('territoryNameInput').value;
+        const group = document.getElementById('territoryGroupInput').value;
+        const description = document.getElementById('territoryDescriptionInput').value;
 
-            if (!number) {
-                this.showToast('Territory number is required', 'error');
-                return;
-            }
-
-            try {
-                if (editId) {
-                    // Update existing territory
-                    const territoryDataObj = {
-                        number,
-                        name,
-                        groupId: parseInt(group),
-                        description
-                    };
-                    await territoryData.updateTerritory(parseInt(editId), territoryDataObj);
-                    this.showToast('Territory updated successfully', 'success');
-                } else {
-                    // Create new territory with auto-generated ID
-                    const territories = territoryData.getAllTerritories();
-                    const nextId = territories.reduce((max, t) => Math.max(max, t.id), 0) + 1;
-
-                    const territoryDataObj = {
-                        id: nextId,
-                        number,
-                        name,
-                        groupId: parseInt(group),
-                        description
-                    };
-
-                    await territoryData.addTerritory(territoryDataObj);
-                    this.showToast('Territory added successfully', 'success');
-                }
-
-                this.closeTerritoryModal();
-                this.renderListView();
-                if (territoryMap) territoryMap.render();
-
-            } catch (error) {
-                console.error('Failed to save territory:', error);
-                this.showToast('Failed to save territory', 'error');
-            }
+        if (!number) {
+            this.showToast('Territory number is required', 'error');
+            return;
         }
+
+        try {
+            if (editId) {
+                // Update existing territory
+                const territoryDataObj = {
+                    number,
+                    name,
+                    groupId: parseInt(group),
+                    description
+                };
+                await territoryData.updateTerritory(parseInt(editId), territoryDataObj);
+                this.showToast('Territory updated successfully', 'success');
+            } else {
+                // Create new territory with auto-generated ID
+                const territories = territoryData.getAllTerritories();
+                const nextId = territories.reduce((max, t) => Math.max(max, t.id), 0) + 1;
+
+                const territoryDataObj = {
+                    id: nextId,
+                    number,
+                    name,
+                    groupId: parseInt(group),
+                    description
+                };
+
+                await territoryData.addTerritory(territoryDataObj);
+                this.showToast('Territory added successfully', 'success');
+            }
+
+            this.closeTerritoryModal();
+            this.renderListView();
+            if (territoryMap) territoryMap.render();
+
+        } catch (error) {
+            console.error('Failed to save territory:', error);
+            this.showToast('Failed to save territory', 'error');
+        }
+    }
 
     /**
      * Handle territory deletion
      */
     async handleDeleteTerritory(id) {
-            if (!confirm(`Are you sure you want to delete territory #${id}? This will also unassign any map regions associated with it.`)) {
-                return;
-            }
-
-            try {
-                await territoryData.deleteTerritory(id);
-                this.showToast('Territory deleted successfully', 'success');
-                this.renderListView();
-                if (territoryMap) territoryMap.render();
-            } catch (error) {
-                console.error('Failed to delete territory:', error);
-                this.showToast('Failed to delete territory', 'error');
-            }
+        if (!confirm(`Are you sure you want to delete territory #${id}? This will also unassign any map regions associated with it.`)) {
+            return;
         }
 
-        /**
-         * Filter list view
-         */
-        filterListView(search = '', group = 'all') {
-            const territories = territoryData.filterTerritories({ search, group });
-            this.renderTerritoryCards(territories);
+        try {
+            await territoryData.deleteTerritory(id);
+            this.showToast('Territory deleted successfully', 'success');
+            this.renderListView();
+            if (territoryMap) territoryMap.render();
+        } catch (error) {
+            console.error('Failed to delete territory:', error);
+            this.showToast('Failed to delete territory', 'error');
+        }
+    }
 
-            // Update stats
-            const statsElement = document.getElementById('listStats');
-            if (statsElement) {
-                statsElement.innerHTML = `
+    /**
+     * Filter list view
+     */
+    filterListView(search = '', group = 'all') {
+        const territories = territoryData.filterTerritories({ search, group });
+        this.renderTerritoryCards(territories);
+
+        // Update stats
+        const statsElement = document.getElementById('listStats');
+        if (statsElement) {
+            statsElement.innerHTML = `
                 <span class="stat-item">Showing: <strong>${territories.length}</strong></span>
             `;
-            }
         }
+    }
 
-        /**
-         * Show territory on map
-         */
-        showTerritoryOnMap(id) {
-            this.switchView('map');
-            if (territoryMap) {
-                territoryMap.highlightTerritory(id);
-            }
+    /**
+     * Show territory on map
+     */
+    showTerritoryOnMap(id) {
+        this.switchView('map');
+        if (territoryMap) {
+            territoryMap.highlightTerritory(id);
         }
+    }
 
-        /**
-         * Show territory details in list panel (unified with map panel)
-         */
-        showListDetailPanel(id) {
-            const territory = territoryData.getTerritory(id);
-            if (!territory) return;
+    /**
+     * Show territory details in list panel (unified with map panel)
+     */
+    showListDetailPanel(id) {
+        const territory = territoryData.getTerritory(id);
+        if (!territory) return;
 
-            const panel = document.getElementById('listDetailsPanel');
-            const content = document.getElementById('listPanelContent');
-            if (!panel || !content) return;
+        const panel = document.getElementById('listDetailsPanel');
+        const content = document.getElementById('listPanelContent');
+        if (!panel || !content) return;
 
-            const displayNumber = territory.number || territory.id;
-            const group = territoryData.getGroup(territory.groupId || territory.group);
-            const groupName = group ? group.name : (territory.group || 'Unassigned');
-            const color = group ? group.color : '#ccc';
-            const assignments = territory.assignments || [];
+        const displayNumber = territory.number || territory.id;
+        const group = territoryData.getGroup(territory.groupId || territory.group);
+        const groupName = group ? group.name : (territory.group || 'Unassigned');
+        const color = group ? group.color : '#ccc';
+        const assignments = territory.assignments || [];
 
-            // Sort assignments by date (most recent first)
-            const sortedAssignments = [...assignments].sort((a, b) =>
-                new Date(b.dateAssigned || 0) - new Date(a.dateAssigned || 0)
-            );
+        // Sort assignments by date (most recent first)
+        const sortedAssignments = [...assignments].sort((a, b) =>
+            new Date(b.dateAssigned || 0) - new Date(a.dateAssigned || 0)
+        );
 
-            content.innerHTML = `
+        content.innerHTML = `
             <div class="territory-detail">
                 <div class="territory-header">
                     <div class="territory-number" style="background: ${color}">${displayNumber}</div>
@@ -821,281 +823,281 @@ class App {
             </div>
         `;
 
-            panel.classList.add('open');
-        }
+        panel.classList.add('open');
+    }
 
-        /**
-         * Close list details panel
-         */
-        closeListDetailsPanel() {
-            const panel = document.getElementById('listDetailsPanel');
-            if (panel) {
-                panel.classList.remove('open');
-            }
+    /**
+     * Close list details panel
+     */
+    closeListDetailsPanel() {
+        const panel = document.getElementById('listDetailsPanel');
+        if (panel) {
+            panel.classList.remove('open');
         }
+    }
 
-        /**
-         * Show add assignment modal (delegates to map's modal)
-         */
-        showAddAssignmentModal(territoryId) {
-            if (territoryMap) {
-                territoryMap.openAssignmentModal(territoryId);
-            }
+    /**
+     * Show add assignment modal (delegates to map's modal)
+     */
+    showAddAssignmentModal(territoryId) {
+        if (territoryMap) {
+            territoryMap.openAssignmentModal(territoryId);
         }
+    }
 
-        /**
-         * Edit assignment
-         */
-        editAssignment(territoryId, assignmentId) {
-            if (territoryMap) {
-                territoryMap.openAssignmentModal(territoryId, assignmentId);
-            }
+    /**
+     * Edit assignment
+     */
+    editAssignment(territoryId, assignmentId) {
+        if (territoryMap) {
+            territoryMap.openAssignmentModal(territoryId, assignmentId);
         }
+    }
 
     /**
      * Delete assignment
      */
     async deleteAssignment(territoryId, assignmentId) {
-            if (!confirm('Are you sure you want to delete this assignment record?')) return;
+        if (!confirm('Are you sure you want to delete this assignment record?')) return;
 
-            try {
-                await territoryData.deleteAssignment(territoryId, assignmentId);
-                this.showToast('Assignment deleted', 'success');
-                this.showListDetailPanel(territoryId); // Refresh panel
-            } catch (error) {
-                console.error('Failed to delete assignment:', error);
-                this.showToast('Failed to delete assignment', 'error');
-            }
+        try {
+            await territoryData.deleteAssignment(territoryId, assignmentId);
+            this.showToast('Assignment deleted', 'success');
+            this.showListDetailPanel(territoryId); // Refresh panel
+        } catch (error) {
+            console.error('Failed to delete assignment:', error);
+            this.showToast('Failed to delete assignment', 'error');
         }
+    }
 
     /**
      * Export data
      */
     async exportData() {
-            try {
-                await storage.exportData();
-                this.showToast('Data exported successfully', 'success');
-            } catch (error) {
-                console.error('Export failed:', error);
-                this.showToast('Failed to export data', 'error');
-            }
+        try {
+            await storage.exportData();
+            this.showToast('Data exported successfully', 'success');
+        } catch (error) {
+            console.error('Export failed:', error);
+            this.showToast('Failed to export data', 'error');
         }
+    }
 
     /**
      * Import data
      */
     async importData(file) {
-            try {
-                await storage.importData(file);
-                await territoryData.init();
+        try {
+            await storage.importData(file);
+            await territoryData.init();
 
-                // Refresh views
-                this.renderListView();
-                if (territoryMap) {
-                    territoryMap.render();
-                }
-                if (territoryEditor) {
-                    territoryEditor.populateTerritorySelect();
-                    territoryEditor.updateUnassignedList();
-                    territoryEditor.render();
-                }
-
-                this.showToast('Data imported successfully', 'success');
-            } catch (error) {
-                console.error('Import failed:', error);
-                this.showToast('Failed to import data: ' + error.message, 'error');
-            }
-        }
-
-        /**
-         * Handle data changes
-         */
-        handleDataChange(event, data) {
-            console.log('Data changed:', event, data);
-
-            // Refresh relevant views
-            if (this.currentView === 'list') {
-                this.renderListView();
-            }
-            if (this.currentView === 'map' && territoryMap) {
+            // Refresh views
+            this.renderListView();
+            if (territoryMap) {
                 territoryMap.render();
             }
-        }
-
-        /**
-         * Handle keyboard shortcuts
-         */
-        handleKeyboardShortcuts(e) {
-            // Global shortcuts
-            if (e.altKey) {
-                switch (e.key) {
-                    case '1':
-                        this.switchView('map');
-                        e.preventDefault();
-                        break;
-                    case '2':
-                        this.switchView('list');
-                        e.preventDefault();
-                        break;
-                    case '3':
-                        this.switchView('editor');
-                        e.preventDefault();
-                        break;
-                }
+            if (territoryEditor) {
+                territoryEditor.populateTerritorySelect();
+                territoryEditor.updateUnassignedList();
+                territoryEditor.render();
             }
 
-            // Ctrl/Cmd shortcuts
-            if (e.ctrlKey || e.metaKey) {
-                switch (e.key) {
-                    case 's':
-                        // Save
-                        e.preventDefault();
-                        storage.save().then(() => {
-                            this.showToast('Saved to cloud', 'success');
-                        }).catch(err => {
-                            this.showToast('Failed to save', 'error');
-                        });
-                        break;
-                }
+            this.showToast('Data imported successfully', 'success');
+        } catch (error) {
+            console.error('Import failed:', error);
+            this.showToast('Failed to import data: ' + error.message, 'error');
+        }
+    }
+
+    /**
+     * Handle data changes
+     */
+    handleDataChange(event, data) {
+        console.log('Data changed:', event, data);
+
+        // Refresh relevant views
+        if (this.currentView === 'list') {
+            this.renderListView();
+        }
+        if (this.currentView === 'map' && territoryMap) {
+            territoryMap.render();
+        }
+    }
+
+    /**
+     * Handle keyboard shortcuts
+     */
+    handleKeyboardShortcuts(e) {
+        // Global shortcuts
+        if (e.altKey) {
+            switch (e.key) {
+                case '1':
+                    this.switchView('map');
+                    e.preventDefault();
+                    break;
+                case '2':
+                    this.switchView('list');
+                    e.preventDefault();
+                    break;
+                case '3':
+                    this.switchView('editor');
+                    e.preventDefault();
+                    break;
             }
         }
 
-        /**
-         * Show loading overlay
-         */
-        showLoading(show) {
-            const overlay = document.getElementById('loadingOverlay');
-            if (overlay) {
-                overlay.classList.toggle('hidden', !show);
+        // Ctrl/Cmd shortcuts
+        if (e.ctrlKey || e.metaKey) {
+            switch (e.key) {
+                case 's':
+                    // Save
+                    e.preventDefault();
+                    storage.save().then(() => {
+                        this.showToast('Saved to cloud', 'success');
+                    }).catch(err => {
+                        this.showToast('Failed to save', 'error');
+                    });
+                    break;
             }
         }
+    }
 
-        /**
-         * Show error message
-         */
-        showError(message) {
-            const overlay = document.getElementById('loadingOverlay');
-            if (overlay) {
-                overlay.innerHTML = `
+    /**
+     * Show loading overlay
+     */
+    showLoading(show) {
+        const overlay = document.getElementById('loadingOverlay');
+        if (overlay) {
+            overlay.classList.toggle('hidden', !show);
+        }
+    }
+
+    /**
+     * Show error message
+     */
+    showError(message) {
+        const overlay = document.getElementById('loadingOverlay');
+        if (overlay) {
+            overlay.innerHTML = `
                 <div class="error-icon">⚠️</div>
                 <p class="error-text">${message}</p>
                 <button class="btn btn-primary" onclick="location.reload()">Reload</button>
             `;
-                overlay.classList.remove('hidden');
-            }
+            overlay.classList.remove('hidden');
         }
+    }
 
-        /**
-         * Show toast notification
-         */
-        showToast(message, type = 'info') {
-            const container = document.getElementById('toastContainer');
-            if (!container) return;
+    /**
+     * Show toast notification
+     */
+    showToast(message, type = 'info') {
+        const container = document.getElementById('toastContainer');
+        if (!container) return;
 
-            const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
-            toast.textContent = message;
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
 
-            container.appendChild(toast);
+        container.appendChild(toast);
 
-            // Remove after 3 seconds
-            setTimeout(() => {
-                toast.style.opacity = '0';
-                setTimeout(() => toast.remove(), 300);
-            }, 3000);
+        // Remove after 3 seconds
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    }
+
+    /**
+     * Format date for display
+     */
+    formatDate(dateStr) {
+        if (!dateStr) return 'N/A';
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('en-IN', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        });
+    }
+
+    /**
+     * Setup Report View
+     */
+    setupReportView() {
+        const yearSelect = document.getElementById('serviceYear');
+        if (!yearSelect) return;
+
+        // Populate service years
+        const years = this.getServiceYears();
+        yearSelect.innerHTML = years.map(year =>
+            `<option value="${year.value}" ${year.current ? 'selected' : ''}>${year.label}</option>`
+        ).join('');
+
+        // Render for current service year
+        const currentYear = years.find(y => y.current);
+        if (currentYear) {
+            this.renderReport(currentYear.value);
         }
+    }
 
-        /**
-         * Format date for display
-         */
-        formatDate(dateStr) {
-            if (!dateStr) return 'N/A';
-            const date = new Date(dateStr);
-            return date.toLocaleDateString('en-IN', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric'
+    /**
+     * Get available service years
+     */
+    getServiceYears() {
+        const years = [];
+        const currentDate = new Date();
+        const currentMonth = currentDate.getMonth(); // 0-11
+        const currentYear = currentDate.getFullYear();
+
+        // Service year runs Sep to Aug
+        // If we're in Sep-Dec, current service year starts this year
+        // If we're in Jan-Aug, current service year started last year
+        const serviceYearStart = currentMonth >= 8 ? currentYear : currentYear - 1;
+
+        // Generate last 5 years and next year
+        for (let i = -1; i < 5; i++) {
+            const startYear = serviceYearStart - i;
+            const endYear = startYear + 1;
+            years.push({
+                value: `${startYear}-${endYear}`,
+                label: `${startYear} - ${endYear}`,
+                current: i === 0
             });
         }
 
-        /**
-         * Setup Report View
-         */
-        setupReportView() {
-            const yearSelect = document.getElementById('serviceYear');
-            if (!yearSelect) return;
+        return years;
+    }
 
-            // Populate service years
-            const years = this.getServiceYears();
-            yearSelect.innerHTML = years.map(year =>
-                `<option value="${year.value}" ${year.current ? 'selected' : ''}>${year.label}</option>`
-            ).join('');
+    /**
+     * Render S-13-E Report
+     */
+    renderReport(serviceYearValue) {
+        const container = document.getElementById('reportContainer');
+        if (!container) return;
 
-            // Render for current service year
-            const currentYear = years.find(y => y.current);
-            if (currentYear) {
-                this.renderReport(currentYear.value);
-            }
+        const [startYear, endYear] = serviceYearValue.split('-').map(Number);
+        const territories = territoryData.getAllTerritories();
+
+        // Sort territories by number
+        const sortedTerritories = [...territories].sort((a, b) => {
+            const numA = parseInt(a.number || a.id) || 0;
+            const numB = parseInt(b.number || b.id) || 0;
+            return numA - numB;
+        });
+
+        // Service year date range: Sep 1 of start year to Aug 31 of end year
+        const serviceYearStart = new Date(startYear, 8, 1); // Sep 1
+        const serviceYearEnd = new Date(endYear, 7, 31);    // Aug 31
+
+        // Split into pages (20 territories per page)
+        const territoriesPerPage = 20;
+        const pages = [];
+        for (let i = 0; i < sortedTerritories.length; i += territoriesPerPage) {
+            pages.push(sortedTerritories.slice(i, i + territoriesPerPage));
         }
 
-        /**
-         * Get available service years
-         */
-        getServiceYears() {
-            const years = [];
-            const currentDate = new Date();
-            const currentMonth = currentDate.getMonth(); // 0-11
-            const currentYear = currentDate.getFullYear();
-
-            // Service year runs Sep to Aug
-            // If we're in Sep-Dec, current service year starts this year
-            // If we're in Jan-Aug, current service year started last year
-            const serviceYearStart = currentMonth >= 8 ? currentYear : currentYear - 1;
-
-            // Generate last 5 years and next year
-            for (let i = -1; i < 5; i++) {
-                const startYear = serviceYearStart - i;
-                const endYear = startYear + 1;
-                years.push({
-                    value: `${startYear}-${endYear}`,
-                    label: `${startYear} - ${endYear}`,
-                    current: i === 0
-                });
-            }
-
-            return years;
-        }
-
-        /**
-         * Render S-13-E Report
-         */
-        renderReport(serviceYearValue) {
-            const container = document.getElementById('reportContainer');
-            if (!container) return;
-
-            const [startYear, endYear] = serviceYearValue.split('-').map(Number);
-            const territories = territoryData.getAllTerritories();
-
-            // Sort territories by number
-            const sortedTerritories = [...territories].sort((a, b) => {
-                const numA = parseInt(a.number || a.id) || 0;
-                const numB = parseInt(b.number || b.id) || 0;
-                return numA - numB;
-            });
-
-            // Service year date range: Sep 1 of start year to Aug 31 of end year
-            const serviceYearStart = new Date(startYear, 8, 1); // Sep 1
-            const serviceYearEnd = new Date(endYear, 7, 31);    // Aug 31
-
-            // Split into pages (20 territories per page)
-            const territoriesPerPage = 20;
-            const pages = [];
-            for (let i = 0; i < sortedTerritories.length; i += territoriesPerPage) {
-                pages.push(sortedTerritories.slice(i, i + territoriesPerPage));
-            }
-
-            // Render each page
-            container.innerHTML = pages.map((pageTerritories, pageIndex) => `
+        // Render each page
+        container.innerHTML = pages.map((pageTerritories, pageIndex) => `
             <div class="report-page">
                 <div class="report-page-header">
                     <h1 class="report-main-title">TERRITORY ASSIGNMENT RECORD</h1>
@@ -1135,72 +1137,72 @@ class App {
                 </div>
             </div>
         `).join('');
+    }
+
+    /**
+     * Render a single report row
+     */
+    renderReportRow(territory, serviceYearStart, serviceYearEnd) {
+        const displayNumber = territory.number || territory.id;
+        const assignments = territory.assignments || [];
+
+        // Filter and sort assignments for this service year
+        const yearAssignments = assignments
+            .filter(a => {
+                const assignedDate = new Date(a.dateAssigned);
+                return assignedDate >= serviceYearStart && assignedDate <= serviceYearEnd;
+            })
+            .sort((a, b) => new Date(a.dateAssigned) - new Date(b.dateAssigned));
+
+        // Get the most recent completed date (from any time, not just this service year)
+        const allCompleted = assignments
+            .filter(a => a.dateCompleted)
+            .map(a => new Date(a.dateCompleted))
+            .sort((a, b) => b - a);
+
+        const lastCompletedDate = allCompleted.length > 0 ? allCompleted[0] : null;
+
+        // Check if there's an ongoing assignment (assigned but not completed) in the current year
+        const hasOngoing = yearAssignments.some(a => a.dateAssigned && !a.dateCompleted);
+
+        // Check if last completed is from before the selected service year (for * marker)
+        const isFromPreviousYear = lastCompletedDate && lastCompletedDate < serviceYearStart;
+
+        // Determine date status class and text
+        let lastCompletedClass = '';
+        let lastCompletedText = '';
+
+        if (hasOngoing) {
+            lastCompletedClass = 'date-ongoing';
+            lastCompletedText = 'Ongoing';
+        } else if (lastCompletedDate) {
+            const monthsAgo = this.getMonthsDifference(lastCompletedDate, new Date());
+            if (monthsAgo > 12) {
+                lastCompletedClass = 'date-old';
+            }
+            lastCompletedText = this.formatReportDate(lastCompletedDate);
         }
 
-        /**
-         * Render a single report row
-         */
-        renderReportRow(territory, serviceYearStart, serviceYearEnd) {
-            const displayNumber = territory.number || territory.id;
-            const assignments = territory.assignments || [];
+        const showAsterisk = isFromPreviousYear && !hasOngoing;
 
-            // Filter and sort assignments for this service year
-            const yearAssignments = assignments
-                .filter(a => {
-                    const assignedDate = new Date(a.dateAssigned);
-                    return assignedDate >= serviceYearStart && assignedDate <= serviceYearEnd;
-                })
-                .sort((a, b) => new Date(a.dateAssigned) - new Date(b.dateAssigned));
+        // Generate publisher row cells and date row cells separately
+        const publisherRowCells = [];
+        const dateRowCells = [];
 
-            // Get the most recent completed date (from any time, not just this service year)
-            const allCompleted = assignments
-                .filter(a => a.dateCompleted)
-                .map(a => new Date(a.dateCompleted))
-                .sort((a, b) => b - a);
-
-            const lastCompletedDate = allCompleted.length > 0 ? allCompleted[0] : null;
-
-            // Check if there's an ongoing assignment (assigned but not completed) in the current year
-            const hasOngoing = yearAssignments.some(a => a.dateAssigned && !a.dateCompleted);
-
-            // Check if last completed is from before the selected service year (for * marker)
-            const isFromPreviousYear = lastCompletedDate && lastCompletedDate < serviceYearStart;
-
-            // Determine date status class and text
-            let lastCompletedClass = '';
-            let lastCompletedText = '';
-
-            if (hasOngoing) {
-                lastCompletedClass = 'date-ongoing';
-                lastCompletedText = 'Ongoing';
-            } else if (lastCompletedDate) {
-                const monthsAgo = this.getMonthsDifference(lastCompletedDate, new Date());
-                if (monthsAgo > 12) {
-                    lastCompletedClass = 'date-old';
-                }
-                lastCompletedText = this.formatReportDate(lastCompletedDate);
+        for (let i = 0; i < 4; i++) {
+            const assignment = yearAssignments[i];
+            if (assignment) {
+                publisherRowCells.push(`<td colspan="2" class="report-publisher-name-cell">${assignment.publisher || ''}</td>`);
+                dateRowCells.push(`<td class="report-date-cell">${this.formatReportDate(assignment.dateAssigned)}</td>`);
+                dateRowCells.push(`<td class="report-date-cell">${assignment.dateCompleted ? this.formatReportDate(assignment.dateCompleted) : ''}</td>`);
+            } else {
+                publisherRowCells.push(`<td colspan="2" class="report-publisher-name-cell"></td>`);
+                dateRowCells.push(`<td class="report-date-cell"></td>`);
+                dateRowCells.push(`<td class="report-date-cell"></td>`);
             }
+        }
 
-            const showAsterisk = isFromPreviousYear && !hasOngoing;
-
-            // Generate publisher row cells and date row cells separately
-            const publisherRowCells = [];
-            const dateRowCells = [];
-
-            for (let i = 0; i < 4; i++) {
-                const assignment = yearAssignments[i];
-                if (assignment) {
-                    publisherRowCells.push(`<td colspan="2" class="report-publisher-name-cell">${assignment.publisher || ''}</td>`);
-                    dateRowCells.push(`<td class="report-date-cell">${this.formatReportDate(assignment.dateAssigned)}</td>`);
-                    dateRowCells.push(`<td class="report-date-cell">${assignment.dateCompleted ? this.formatReportDate(assignment.dateCompleted) : ''}</td>`);
-                } else {
-                    publisherRowCells.push(`<td colspan="2" class="report-publisher-name-cell"></td>`);
-                    dateRowCells.push(`<td class="report-date-cell"></td>`);
-                    dateRowCells.push(`<td class="report-date-cell"></td>`);
-                }
-            }
-
-            return `
+        return `
             <tr class="territory-row-main">
                 <td rowspan="2" class="terr-no-cell">${displayNumber}</td>
                 <td rowspan="2" class="last-completed-cell ${lastCompletedClass}">${lastCompletedText}${showAsterisk ? ' *' : ''}</td>
@@ -1210,32 +1212,32 @@ class App {
                 ${dateRowCells.join('')}
             </tr>
         `;
-        }
-
-        /**
-         * Format date for report (matching PDF format: Mon DD, YYYY)
-         */
-        formatReportDate(dateInput) {
-            if (!dateInput) return '';
-            const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
-            if (isNaN(date.getTime())) return '';
-
-            return date.toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric'
-            });
-        }
-
-        /**
-         * Get difference in months between two dates
-         */
-        getMonthsDifference(date1, date2) {
-            const d1 = new Date(date1);
-            const d2 = new Date(date2);
-            return (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth());
-        }
     }
+
+    /**
+     * Format date for report (matching PDF format: Mon DD, YYYY)
+     */
+    formatReportDate(dateInput) {
+        if (!dateInput) return '';
+        const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+        if (isNaN(date.getTime())) return '';
+
+        return date.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+        });
+    }
+
+    /**
+     * Get difference in months between two dates
+     */
+    getMonthsDifference(date1, date2) {
+        const d1 = new Date(date1);
+        const d2 = new Date(date2);
+        return (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth());
+    }
+}
 
 // Global app reference for onclick handlers
 let app = null;
