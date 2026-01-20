@@ -25,6 +25,7 @@ class TerritoryMap {
         this.searchQuery = '';
         this.colorMode = 'group'; // 'group' or 'timeline'
         this.mapLayer = 'simple'; // 'simple' or 'earth'
+        this.currentFilter = 'all';
 
         // Image dimensions (will be updated when image loads)
         this.imageWidth = 1920;

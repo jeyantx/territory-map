@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Territory Assignment Record - Chennai Urappakkam Congregation">
     <title>Territory Map - Chennai Urappakkam</title>
+    <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
     <link rel="stylesheet" href="css/styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -72,10 +73,26 @@
                     <span>Groups</span>
                 </button>
             </nav>
-            <!-- Header actions removed - import/export no longer needed -->
+            <div class="header-actions">
+                <button class="tool-btn" id="backupToolsBtn" title="Backup Tools">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    <span class="btn-text">Backup</span>
+                </button>
+                <button class="tool-btn" id="logoutBtn" title="Logout">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                        <polyline points="16 17 21 12 16 7"></polyline>
+                        <line x1="21" y1="12" x2="9" y2="12"></line>
+                    </svg>
+                    <span class="btn-text">Logout</span>
+                </button>
+            </div>
         </div>
     </header>
-
     <!-- Main Content -->
     <main class="app-main">
         <!-- Map View -->
