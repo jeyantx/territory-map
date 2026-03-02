@@ -11,6 +11,8 @@ class App {
         this.isInitialized = false;
         this.isAuthenticated = false;
         this.password = "242424";
+        this.viewerPassword = "101010";
+        this.accessLevel = 'full'; // 'full' or 'viewer'
     }
 
     /**
@@ -43,6 +45,9 @@ class App {
             // Initialize editor
             territoryEditor = new TerritoryEditor();
             territoryEditor.init();
+
+            // Apply access level restrictions
+            this.applyAccessRestrictions();
 
             // Setup event listeners
             this.setupEventListeners();
@@ -88,7 +93,16 @@ class App {
             e.preventDefault();
             if (loginPassword.value === this.password) {
                 this.isAuthenticated = true;
+                this.accessLevel = 'full';
                 localStorage.setItem('territory_auth', 'true');
+                localStorage.setItem('territory_access_level', 'full');
+                loginOverlay.classList.remove('active');
+                this.init();
+            } else if (loginPassword.value === this.viewerPassword) {
+                this.isAuthenticated = true;
+                this.accessLevel = 'viewer';
+                localStorage.setItem('territory_auth', 'true');
+                localStorage.setItem('territory_access_level', 'viewer');
                 loginOverlay.classList.remove('active');
                 this.init();
             } else {
@@ -106,6 +120,7 @@ class App {
         const auth = localStorage.getItem('territory_auth');
         if (auth === 'true') {
             this.isAuthenticated = true;
+            this.accessLevel = localStorage.getItem('territory_access_level') || 'full';
             document.getElementById('loginOverlay')?.classList.remove('active');
             // Check auto-logout (2 days inactivity)
             const lastLogin = localStorage.getItem('territory_last_login');
@@ -129,8 +144,10 @@ class App {
      */
     logout() {
         this.isAuthenticated = false;
+        this.accessLevel = 'full';
         localStorage.removeItem('territory_auth');
         localStorage.removeItem('territory_last_login');
+        localStorage.removeItem('territory_access_level');
         window.location.reload();
     }
 
@@ -151,6 +168,24 @@ class App {
                 </div>
             `;
             document.body.appendChild(restrictionOverlay);
+        }
+    }
+
+    /**
+     * Apply access level restrictions for viewer mode
+     */
+    applyAccessRestrictions() {
+        if (this.accessLevel === 'viewer') {
+            // Hide Editor, Groups nav buttons
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                const view = btn.dataset.view;
+                if (view === 'editor' || view === 'groups') {
+                    btn.style.display = 'none';
+                }
+            });
+
+            // Hide Add Territory button in list view
+            document.getElementById('addTerritoryBtn')?.style.setProperty('display', 'none');
         }
     }
 
@@ -538,12 +573,14 @@ class App {
                             <button class="btn-icon view-territory" title="View Details" data-id="${territory.id}">
                                 👁️
                             </button>
+                            ${this.accessLevel === 'full' ? `
                             <button class="btn-icon edit-territory" title="Edit Territory" data-id="${territory.id}">
                                 ✏️
                             </button>
                             <button class="btn-icon delete-territory" title="Delete Territory" data-id="${territory.id}">
                                 🗑️
                             </button>
+                            ` : ''}
                         </div>
                     </div>
                     <div class="card-group ${groupSafeName}">${groupName}</div>
@@ -784,7 +821,7 @@ class App {
                                     <tr>
                                         <th>Publisher</th>
                                         <th>Period</th>
-                                        <th>Actions</th>
+                                        ${this.accessLevel === 'full' ? '<th>Actions</th>' : ''}
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -792,29 +829,35 @@ class App {
                                         <tr>
                                             <td>${a.publisher || 'Unknown'}</td>
                                             <td>${this.formatDate(a.dateAssigned)}${a.dateCompleted ? ` - ${this.formatDate(a.dateCompleted)}` : ' - Present'}</td>
+                                            ${this.accessLevel === 'full' ? `
                                             <td>
                                                 <div class="record-actions">
                                                     <span class="action-icon" onclick="app.editAssignment(${territory.id}, ${a.id})">✏️</span>
                                                     <span class="action-icon" onclick="app.deleteAssignment(${territory.id}, ${a.id})">🗑️</span>
                                                 </div>
                                             </td>
+                                            ` : ''}
                                         </tr>
                                     `).join('')}
                                 </tbody>
                             </table>
                         ` : '<p class="text-muted">No assignment records found.</p>'}
                     </div>
+                    ${this.accessLevel === 'full' ? `
                     <button class="btn btn-primary btn-sm" style="margin-top: 12px;" onclick="app.showAddAssignmentModal(${territory.id})">
                         + Add Record
                     </button>
+                    ` : ''}
                 </div>
 
                 <div class="assignment-section">
                     <h4 class="section-title">Actions</h4>
                     <div class="action-buttons">
+                        ${this.accessLevel === 'full' ? `
                         <button class="btn btn-secondary" onclick="app.openTerritoryModal(${territory.id})">
                             ✏️ Edit Territory
                         </button>
+                        ` : ''}
                         <button class="btn btn-secondary" onclick="app.showTerritoryOnMap(${territory.id})">
                             🗺️ View on Map
                         </button>
@@ -1054,14 +1097,27 @@ class App {
         // If we're in Jan-Aug, current service year started last year
         const serviceYearStart = currentMonth >= 8 ? currentYear : currentYear - 1;
 
-        // Generate last 5 years and next year
-        for (let i = -1; i < 5; i++) {
-            const startYear = serviceYearStart - i;
+        // Find the earliest assignment year from data to determine range
+        let earliestYear = serviceYearStart;
+        const territories = territoryData.getAllTerritories();
+        territories.forEach(t => {
+            (t.assignments || []).forEach(a => {
+                if (a.dateAssigned) {
+                    const d = new Date(a.dateAssigned);
+                    const aMonth = d.getMonth();
+                    const aYearStart = aMonth >= 8 ? d.getFullYear() : d.getFullYear() - 1;
+                    if (aYearStart < earliestYear) earliestYear = aYearStart;
+                }
+            });
+        });
+
+        // Generate from next year down to earliest year with data
+        for (let startYear = serviceYearStart + 1; startYear >= earliestYear; startYear--) {
             const endYear = startYear + 1;
             years.push({
                 value: `${startYear}-${endYear}`,
                 label: `${startYear} - ${endYear}`,
-                current: i === 0
+                current: startYear === serviceYearStart
             });
         }
 
@@ -1154,13 +1210,13 @@ class App {
             })
             .sort((a, b) => new Date(a.dateAssigned) - new Date(b.dateAssigned));
 
-        // Get the most recent completed date (from any time, not just this service year)
-        const allCompleted = assignments
-            .filter(a => a.dateCompleted)
+        // Get the most recent completed date that is within or before this service year
+        const relevantCompleted = assignments
+            .filter(a => a.dateCompleted && new Date(a.dateCompleted) <= serviceYearEnd)
             .map(a => new Date(a.dateCompleted))
             .sort((a, b) => b - a);
 
-        const lastCompletedDate = allCompleted.length > 0 ? allCompleted[0] : null;
+        const lastCompletedDate = relevantCompleted.length > 0 ? relevantCompleted[0] : null;
 
         // Check if there's an ongoing assignment (assigned but not completed) in the current year
         const hasOngoing = yearAssignments.some(a => a.dateAssigned && !a.dateCompleted);
@@ -1176,7 +1232,7 @@ class App {
             lastCompletedClass = 'date-ongoing';
             lastCompletedText = 'Ongoing';
         } else if (lastCompletedDate) {
-            const monthsAgo = this.getMonthsDifference(lastCompletedDate, new Date());
+            const monthsAgo = this.getMonthsDifference(lastCompletedDate, serviceYearEnd);
             if (monthsAgo > 12) {
                 lastCompletedClass = 'date-old';
             }
