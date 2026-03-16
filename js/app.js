@@ -10,8 +10,8 @@ class App {
         this.currentView = 'map';
         this.isInitialized = false;
         this.isAuthenticated = false;
-        this.password = "242424";
-        this.viewerPassword = "101010";
+        this.passwordHash = "b82c52985932456714a4cda67432a05795cbcf94b304c541773ec6ae9bf126f0";
+        this.viewerPasswordHash = "2a057642222a878bc360f52f8e1f0dfd2af93196f123269397423155a4ec4884";
         this.accessLevel = 'full'; // 'full' or 'viewer'
     }
 
@@ -79,6 +79,18 @@ class App {
     }
 
     /**
+     * SHA-256 hash using Web Crypto API
+     */
+    async sha256(message) {
+        var msgBuffer = new TextEncoder().encode(message);
+        var hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+        var hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(function(b) {
+            return b.toString(16).padStart(2, '0');
+        }).join('');
+    }
+
+    /**
      * Setup login logic
      */
     setupLogin() {
@@ -89,19 +101,20 @@ class App {
 
         if (!loginForm) return;
 
-        loginForm.addEventListener('submit', (e) => {
+        loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            if (loginPassword.value === this.password) {
+            const inputHash = await this.sha256(loginPassword.value);
+            if (inputHash === this.passwordHash) {
                 this.isAuthenticated = true;
                 this.accessLevel = 'full';
-                localStorage.setItem('territory_auth', 'true');
+                localStorage.setItem('territory_auth', inputHash);
                 localStorage.setItem('territory_access_level', 'full');
                 loginOverlay.classList.remove('active');
                 this.init();
-            } else if (loginPassword.value === this.viewerPassword) {
+            } else if (inputHash === this.viewerPasswordHash) {
                 this.isAuthenticated = true;
                 this.accessLevel = 'viewer';
-                localStorage.setItem('territory_auth', 'true');
+                localStorage.setItem('territory_auth', inputHash);
                 localStorage.setItem('territory_access_level', 'viewer');
                 loginOverlay.classList.remove('active');
                 this.init();
@@ -118,7 +131,7 @@ class App {
     checkAuth() {
         if (this.isAuthenticated) return true;
         const auth = localStorage.getItem('territory_auth');
-        if (auth === 'true') {
+        if (auth === this.passwordHash || auth === this.viewerPasswordHash) {
             this.isAuthenticated = true;
             this.accessLevel = localStorage.getItem('territory_access_level') || 'full';
             document.getElementById('loginOverlay')?.classList.remove('active');
@@ -292,12 +305,13 @@ class App {
             document.body.appendChild(importInput);
         }
 
-        importInput.addEventListener('change', (e) => {
+        importInput.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (file) {
                 // Check password
                 const password = prompt("Enter password to import data:");
-                if (password === "343434") {
+                const importHash = password ? await this.sha256(password) : '';
+                if (importHash === "fcf3e61d45d82dffb8bf5e0d31ec1a37334624db53e4b08407b5606a04b38231") {
                     this.showLoading(true);
                     storage.importData(file).then(() => {
                         this.showLoading(false);
