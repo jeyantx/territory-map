@@ -228,6 +228,7 @@ class TerritoryMap {
         if (this.colorMode === 'timeline') {
             legend.className = 'map-legend timeline-legend';
             legend.innerHTML = `
+                <div class="legend-item"><div class="legend-color" style="background: #FDD835"></div><span>Ongoing</span></div>
                 <div class="legend-item"><div class="legend-color" style="background: #4CAF50"></div><span>Recently Completed</span></div>
                 <div class="legend-item"><div class="legend-color" style="background: #A5D6A7"></div><span>Completed Earlier</span></div>
                 <div class="legend-item"><div class="legend-color" style="background: #FFCDD2"></div><span>Not Completed (Yearly)</span></div>
@@ -1328,6 +1329,11 @@ class TerritoryMap {
      */
     getTimelineColor(territory) {
         const assignments = territory.assignments || [];
+
+        // Ongoing (assigned but not yet completed) takes priority — show as yellow
+        const hasOngoing = assignments.some(a => a.dateAssigned && !a.dateCompleted);
+        if (hasOngoing) return '#FDD835'; // Yellow (Ongoing)
+
         const completed = assignments.filter(a => a.dateCompleted).map(a => new Date(a.dateCompleted)).sort((a, b) => b - a);
 
         if (completed.length === 0) return '#C62828'; // Muted Dark Red (Never)
