@@ -704,6 +704,94 @@ class TerritoryData {
         return result;
     }
 
+    // ------------------------------------------------------------------
+    // Service year helpers (shared by the sheet, summary and map views)
+    // ------------------------------------------------------------------
+
+    /**
+     * Boundaries of a service year (Sep 1 - Aug 31).
+     * @param {string|null} value - e.g. '2025-2026'; the current service year when omitted
+     */
+    getServiceYearRange(value = null) {
+        let startYear = value ? parseInt(String(value).split('-')[0], 10) : NaN;
+
+        if (!startYear || isNaN(startYear)) {
+            const now = new Date();
+            startYear = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+        }
+
+        return {
+            value: `${startYear}-${startYear + 1}`,
+            startYear,
+            start: new Date(startYear, 8, 1),
+            end: new Date(startYear + 1, 7, 31, 23, 59, 59)
+        };
+    }
+
+    /**
+     * Where a territory stands within a service year.
+     *
+     * Status buckets are mutually exclusive: a record still open at the end of
+     * the year makes it "In progress", otherwise a completion inside the year
+     * makes it "Completed", otherwise it is "Yet to start" for that year.
+     */
+    getServiceYearActivity(territory, range) {
+        const assignments = territory.assignments || [];
+        const date = (value) => (value ? new Date(value) : null);
+        const withinYear = (value) => {
+            const d = date(value);
+            return !!d && d >= range.start && d <= range.end;
+        };
+
+        // Started on or before the year end and not finished by then
+        const open = assignments
+            .filter(a => a.dateAssigned && date(a.dateAssigned) <= range.end &&
+                (!a.dateCompleted || date(a.dateCompleted) > range.end))
+            .sort((a, b) => date(b.dateAssigned) - date(a.dateAssigned));
+
+        const completedInYear = assignments
+            .filter(a => withinYear(a.dateCompleted))
+            .sort((a, b) => date(b.dateCompleted) - date(a.dateCompleted));
+
+        // Every record that already existed by the year end, newest first
+        const untilYearEnd = assignments
+            .filter(a => (a.dateAssigned && date(a.dateAssigned) <= range.end) ||
+                (a.dateCompleted && date(a.dateCompleted) <= range.end))
+            .sort((a, b) => date(b.dateAssigned || b.dateCompleted) - date(a.dateAssigned || a.dateCompleted));
+
+        // Records that belong to this service year
+        const inYear = assignments.filter(a => withinYear(a.dateAssigned) || withinYear(a.dateCompleted));
+
+        const completedEver = assignments
+            .filter(a => a.dateCompleted && date(a.dateCompleted) <= range.end)
+            .sort((a, b) => date(b.dateCompleted) - date(a.dateCompleted));
+
+        const lastCompleted = completedEver.length ? completedEver[0].dateCompleted : '';
+
+        let status;
+        if (open.length) status = 'In progress';
+        else if (completedInYear.length) status = 'Completed';
+        else status = 'Yet to start';
+
+        return {
+            status,
+            latest: open[0] || completedInYear[0] || untilYearEnd[0] || null,
+            recordsInYear: inYear.length,
+            coveredInYear: completedInYear.length > 0,
+            lastCompleted,
+            lastCompletedIsEarlier: !!lastCompleted && new Date(lastCompleted) < range.start,
+            neverCompleted: completedEver.length === 0
+        };
+    }
+
+    /**
+     * Personal territories are worked by one publisher and are excluded from
+     * the congregation's group totals.
+     */
+    isPersonalTerritory(territory) {
+        return !!(territory && territory.isPersonal);
+    }
+
     /**
      * Get metadata
      */

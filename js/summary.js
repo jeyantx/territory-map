@@ -1,9 +1,10 @@
 /**
  * Summary Module
  *
- * Group-wise overview: how many territories each group holds, how many are
- * in progress, completed or not yet started, and how much of the group was
- * covered in a chosen service year.
+ * Group-wise overview for a chosen service year: how many territories each
+ * group holds and how many were completed, started or not touched during
+ * that year. Personal territories are counted separately and left out of the
+ * group totals and progress.
  */
 
 class TerritorySummary {
@@ -19,6 +20,7 @@ class TerritorySummary {
         this.yearSelect?.addEventListener('change', (e) => {
             this.serviceYear = e.target.value;
             this.render();
+            app?.syncUrl();
         });
 
         // Drill through to the sheet with the matching filter applied
@@ -28,11 +30,13 @@ class TerritorySummary {
 
             const group = target.dataset.drillGroup;
             const status = target.dataset.drillStatus;
+            const personal = target.dataset.drillPersonal;
 
             territorySheet.applyExternalFilter({
                 group: group === '*' ? [] : [group],
-                status: status ? [status] : []
-            });
+                status: status ? [status] : [],
+                personal: personal ? [personal] : []
+            }, this.serviceYear);
             app.switchView('sheet');
         };
 
@@ -66,34 +70,23 @@ class TerritorySummary {
     }
 
     /**
-     * Service year boundaries (Sep 1 - Aug 31)
-     */
-    getServiceYearRange() {
-        let startYear = this.serviceYear ? parseInt(String(this.serviceYear).split('-')[0], 10) : null;
-        if (!startYear) {
-            const now = new Date();
-            startYear = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
-        }
-        return {
-            start: new Date(startYear, 8, 1),
-            end: new Date(startYear + 1, 7, 31, 23, 59, 59)
-        };
-    }
-
-    /**
-     * Per-group tallies plus an "all groups" total
+     * Per-group tallies for the selected service year, plus an overall total.
+     *
+     * `total` counts the territories the group is responsible for this year,
+     * which excludes personal territories; those are reported as `personal`.
      */
     buildStats() {
-        const { start, end } = this.getServiceYearRange();
+        const range = territoryData.getServiceYearRange(this.serviceYear);
         const groups = territoryData.getAllGroups();
 
         const blank = (name, color, id) => ({
             id, name, color,
-            total: 0,
+            total: 0,        // non-personal territories
+            personal: 0,
             yetToStart: 0,
             inProgress: 0,
             completed: 0,
-            doneThisYear: 0,
+            covered: 0,      // completed at least once during the year
             neverCompleted: 0
         });
 
@@ -108,72 +101,79 @@ class TerritorySummary {
             const bucket = group ? buckets.get(String(group.id)) : ungrouped;
             if (!bucket) return;
 
-            const assignments = (t.assignments || []).slice().sort((a, b) =>
-                new Date(b.dateAssigned || 0) - new Date(a.dateAssigned || 0)
-            );
-            const latest = assignments[0] || null;
+            if (territoryData.isPersonalTerritory(t)) {
+                bucket.personal++;
+                totals.personal++;
+                return;
+            }
 
-            const completedDates = assignments.filter(a => a.dateCompleted).map(a => new Date(a.dateCompleted));
-            const doneThisYear = completedDates.some(d => d >= start && d <= end);
+            const activity = territoryData.getServiceYearActivity(t, range);
 
             [bucket, totals].forEach(b => {
                 b.total++;
-                if (!latest) b.yetToStart++;
-                else if (latest.dateAssigned && !latest.dateCompleted) b.inProgress++;
-                else b.completed++;
+                if (activity.status === 'In progress') b.inProgress++;
+                else if (activity.status === 'Completed') b.completed++;
+                else b.yetToStart++;
 
-                if (doneThisYear) b.doneThisYear++;
-                if (!completedDates.length) b.neverCompleted++;
+                if (activity.coveredInYear) b.covered++;
+                if (activity.neverCompleted) b.neverCompleted++;
             });
         });
 
         const list = [...buckets.values()];
-        if (ungrouped.total) list.push(ungrouped);
+        if (ungrouped.total || ungrouped.personal) list.push(ungrouped);
 
-        return { groups: list, totals };
+        return { groups: list, totals, range };
     }
 
     render() {
         if (!this.container) return;
 
-        const { groups, totals } = this.buildStats();
+        const { groups, totals, range } = this.buildStats();
 
-        this.renderTotals(totals);
+        this.renderTotals(totals, range);
 
         this.container.innerHTML = groups.length
-            ? groups.map(g => this.renderCard(g)).join('')
+            ? groups.map(g => this.renderCard(g, range)).join('')
             : '<p class="panel-placeholder">No groups yet. Add groups to see a breakdown.</p>';
     }
 
-    renderTotals(totals) {
+    renderTotals(totals, range) {
         if (!this.totalsEl) return;
 
         const tiles = [
-            { label: 'Territories', value: totals.total, cls: 'neutral', status: null },
-            { label: 'Yet to start', value: totals.yetToStart, cls: 'danger', status: 'Yet to start' },
+            { label: 'Territories', value: totals.total + totals.personal, cls: 'neutral', status: null },
+            { label: 'Personal (not counted)', value: totals.personal, cls: 'info', status: null, personal: 'Personal' },
+            { label: 'Congregation territories', value: totals.total, cls: 'neutral', status: null, personal: 'Regular' },
+            { label: `Completed in ${range.value}`, value: totals.completed, cls: 'success', status: 'Completed' },
             { label: 'In progress', value: totals.inProgress, cls: 'warning', status: 'In progress' },
-            { label: 'Completed', value: totals.completed, cls: 'success', status: 'Completed' },
-            { label: 'Covered this year', value: totals.doneThisYear, cls: 'info', status: null },
+            { label: `Not worked in ${range.value}`, value: totals.yetToStart, cls: 'danger', status: 'Yet to start' },
             { label: 'Never completed', value: totals.neverCompleted, cls: 'danger', status: null }
         ];
 
-        this.totalsEl.innerHTML = tiles.map(tile => `
-            <div class="summary-tile ${tile.cls}" ${tile.status ? `data-drill-group="*" data-drill-status="${tile.status}" role="button"` : ''}>
-                <span class="summary-tile-value">${tile.value}</span>
-                <span class="summary-tile-label">${tile.label}</span>
-            </div>
-        `).join('');
+        this.totalsEl.innerHTML = tiles.map(tile => {
+            const drillable = tile.status || tile.personal;
+            const attrs = drillable
+                ? `data-drill-group="*" ${tile.status ? `data-drill-status="${tile.status}"` : ''} ${tile.personal ? `data-drill-personal="${tile.personal}"` : ''} role="button"`
+                : '';
+            return `
+                <div class="summary-tile ${tile.cls}" ${attrs}>
+                    <span class="summary-tile-value">${tile.value}</span>
+                    <span class="summary-tile-label">${tile.label}</span>
+                </div>
+            `;
+        }).join('');
     }
 
-    renderCard(group) {
-        const pct = group.total ? Math.round((group.doneThisYear / group.total) * 100) : 0;
+    renderCard(group, range) {
+        const pct = group.total ? Math.round((group.covered / group.total) * 100) : 0;
         // Territories with no group filter on a blank Group cell in the sheet
         const drill = group.id === null ? '' : this.escape(group.name);
 
         const rows = [
-            { label: 'Yet to start', value: group.yetToStart, cls: 'danger', status: 'Yet to start' },
+            { label: `Completed in ${range.value}`, value: group.completed, cls: 'success', status: 'Completed' },
             { label: 'In progress', value: group.inProgress, cls: 'warning', status: 'In progress' },
-            { label: 'Completed', value: group.completed, cls: 'success', status: 'Completed' }
+            { label: 'Not worked yet', value: group.yetToStart, cls: 'danger', status: 'Yet to start' }
         ];
 
         return `
@@ -184,9 +184,16 @@ class TerritorySummary {
                     <span class="summary-card-total">${group.total}<small>territories</small></span>
                 </div>
 
+                ${group.personal ? `
+                    <button class="summary-personal-note" data-drill-group="${drill}" data-drill-personal="Personal">
+                        ${group.personal} personal territor${group.personal === 1 ? 'y' : 'ies'} not counted
+                    </button>
+                ` : ''}
+
                 <div class="summary-stat-rows">
                     ${rows.map(row => `
-                        <button class="summary-stat-row ${row.cls}" data-drill-group="${drill}" data-drill-status="${row.status}">
+                        <button class="summary-stat-row ${row.cls}" data-drill-group="${drill}"
+                                data-drill-status="${row.status}" data-drill-personal="Regular">
                             <span class="summary-stat-dot"></span>
                             <span class="summary-stat-label">${row.label}</span>
                             <span class="summary-stat-value">${row.value}</span>
@@ -196,8 +203,8 @@ class TerritorySummary {
 
                 <div class="summary-progress">
                     <div class="summary-progress-head">
-                        <span>Covered in ${this.serviceYear || 'this year'}</span>
-                        <strong>${group.doneThisYear} / ${group.total} &middot; ${pct}%</strong>
+                        <span>Covered in ${range.value}</span>
+                        <strong>${group.covered} / ${group.total} &middot; ${pct}%</strong>
                     </div>
                     <div class="summary-progress-track">
                         <div class="summary-progress-fill" style="width: ${pct}%"></div>
@@ -210,6 +217,21 @@ class TerritorySummary {
                 </div>
             </div>
         `;
+    }
+
+    // ------------------------------------------------------------------
+    // URL state
+    // ------------------------------------------------------------------
+
+    writeUrlParams(params) {
+        if (this.serviceYear) params.set('summaryYear', this.serviceYear);
+    }
+
+    readUrlParams(params) {
+        const year = params.get('summaryYear');
+        if (!year) return;
+        this.serviceYear = year;
+        if (this.yearSelect) this.yearSelect.value = year;
     }
 
     escape(value) {

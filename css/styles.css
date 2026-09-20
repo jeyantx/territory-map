@@ -2879,9 +2879,73 @@ th.sheet-sticky-col {
     margin-right: var(--sidebar-width);
 }
 
-.sheet-details-panel.is-readonly .record-actions,
-.sheet-details-panel.is-readonly .assignment-section .btn {
-    display: none;
+.sheet-cell-check {
+    text-align: center !important;
+}
+
+.sheet-check {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 32px;
+    cursor: pointer;
+}
+
+.sheet-check input {
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+    accent-color: var(--color-primary);
+}
+
+.sheet-personal-badge {
+    flex-shrink: 0;
+    padding: 1px 6px;
+    background: var(--color-accent-light);
+    border-radius: var(--radius-full);
+    color: var(--color-primary-dark);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.sheet-earlier-mark {
+    margin-left: 2px;
+    color: var(--color-accent-dark);
+    font-weight: 700;
+}
+
+.sheet-panel-toggle {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm);
+    background: var(--color-bg-warm);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+}
+
+.sheet-panel-toggle input {
+    margin-top: 3px;
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+    cursor: pointer;
+    accent-color: var(--color-primary);
+}
+
+.sheet-panel-toggle span {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    font-size: 0.8125rem;
+    color: var(--color-text);
+}
+
+.sheet-panel-toggle small {
+    color: var(--color-text-light);
+    font-size: 0.6875rem;
 }
 
 .sheet-empty {
@@ -3299,4 +3363,22 @@ th.sheet-sticky-col {
     .sheet-view.panel-open .sheet-table-wrapper {
         margin-right: 0;
     }
+}
+
+.summary-personal-note {
+    align-self: flex-start;
+    padding: 3px 9px;
+    background: var(--color-bg-warm);
+    border: 1px dashed var(--color-border-dark);
+    border-radius: var(--radius-full);
+    color: var(--color-text-light);
+    font-family: var(--font-sans);
+    font-size: 0.6875rem;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.summary-personal-note:hover {
+    border-style: solid;
+    color: var(--color-primary-dark);
 }

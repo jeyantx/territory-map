@@ -188,18 +188,7 @@ class TerritoryMap {
      * Get the start/end dates of the currently selected service year (Sep 1 - Aug 31)
      */
     getServiceYearRange() {
-        let startYear;
-        if (this.serviceYear) {
-            startYear = parseInt(String(this.serviceYear).split('-')[0], 10);
-        }
-        if (!startYear) {
-            const now = new Date();
-            startYear = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
-        }
-        return {
-            start: new Date(startYear, 8, 1),
-            end: new Date(startYear + 1, 7, 31, 23, 59, 59)
-        };
+        return territoryData.getServiceYearRange(this.serviceYear);
     }
 
     /**
@@ -743,6 +732,7 @@ class TerritoryMap {
         // Filter
         document.getElementById('groupFilter')?.addEventListener('change', (e) => {
             this.setFilter(e.target.value);
+            if (typeof app !== 'undefined' && app) app.syncUrl();
         });
 
         // Search

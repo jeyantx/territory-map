@@ -285,6 +285,10 @@
                     </svg>
                     <input type="text" class="search-input" id="sheetSearch" placeholder="Search all columns...">
                 </div>
+                <div class="filter-controls">
+                    <label class="filter-label" for="sheetServiceYear">Service Year:</label>
+                    <select class="group-filter" id="sheetServiceYear"></select>
+                </div>
                 <button class="btn btn-secondary btn-sm" id="sheetClearFilters">Clear Filters</button>
                 <div class="sheet-stats" id="sheetStats"></div>
                 <div class="sheet-toolbar-actions">
@@ -293,9 +297,10 @@
                 </div>
             </div>
             <div class="sheet-hint">
-                Click a column header to sort, or the funnel icon to filter by value. Edits save automatically.
-                Click any row to see its full assignment history &mdash; use <strong>Edit</strong> to change the
-                latest record, or <strong>+ New</strong> to add one.
+                Status, publisher and dates are shown for the selected service year. Click a column header to sort
+                or the funnel icon to filter; click any row for its full history. <strong>Edit</strong> changes the
+                latest record, <strong>+ New</strong> adds one, and a <strong>*</strong> marks a completion from an
+                earlier year.
             </div>
             <div class="sheet-table-wrapper" id="sheetTableWrapper">
                 <table class="sheet-table">

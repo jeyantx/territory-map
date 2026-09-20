@@ -3,6 +3,9 @@
  *
  * Spreadsheet-style view of every territory: all fields visible in one grid,
  * editable inline, with Excel-style per-column filtering and sorting.
+ *
+ * The record columns (status, publisher, dates) are shown for a chosen
+ * service year, so the sheet reads as "how did this year go".
  */
 
 class TerritorySheet {
@@ -10,6 +13,7 @@ class TerritorySheet {
         this.container = null;
         this.search = '';
         this.sort = { key: 'number', dir: 'asc' };
+        this.serviceYear = null; // e.g. '2025-2026'; null = current service year
 
         // key -> Set of selected display values. A missing key means "no filter".
         this.filters = {};
@@ -20,15 +24,15 @@ class TerritorySheet {
 
         this.columns = [
             { key: 'number', label: 'Map No', width: 90, type: 'text', editable: true, sticky: true },
-            { key: 'name', label: 'Territory Name', width: 220, type: 'text', editable: true },
-            { key: 'group', label: 'Group', width: 170, type: 'group', editable: true },
-            { key: 'status', label: 'Status', width: 130, type: 'status', editable: false },
-            { key: 'publisher', label: 'Last Assigned To', width: 170, type: 'text', editable: false },
-            { key: 'dateAssigned', label: 'Date Last Started', width: 150, type: 'date', editable: false },
-            { key: 'dateCompleted', label: 'Date Last Completed', width: 160, type: 'date', editable: false },
-            { key: 'lastCompleted', label: 'Last Completed (any)', width: 155, type: 'date', editable: false },
+            { key: 'name', label: 'Territory Name', width: 210, type: 'text', editable: true },
+            { key: 'group', label: 'Group', width: 200, type: 'group', editable: true },
+            { key: 'personal', label: 'Personal', width: 90, type: 'personal', editable: true },
+            { key: 'status', label: 'Status', width: 125, type: 'status', editable: false },
+            { key: 'publisher', label: 'Last Assigned To', width: 165, type: 'text', editable: false },
+            { key: 'dateAssigned', label: 'Date Last Started', width: 145, type: 'date', editable: false },
+            { key: 'dateCompleted', label: 'Date Last Completed', width: 165, type: 'lastCompleted', editable: false },
             { key: 'records', label: 'Records', width: 80, type: 'number', editable: false },
-            { key: 'comments', label: 'Comments', width: 260, type: 'text', editable: true }
+            { key: 'comments', label: 'Comments', width: 240, type: 'text', editable: true }
         ];
 
         this.statusOrder = ['Yet to start', 'In progress', 'Completed'];
@@ -46,12 +50,39 @@ class TerritorySheet {
         this.detailsPanel = document.getElementById('sheetDetailsPanel');
         this.panelContent = document.getElementById('sheetPanelContent');
 
+        this.populateServiceYears();
         this.setupEventListeners();
         this.render();
     }
 
     get readOnly() {
         return typeof app !== 'undefined' && app && app.accessLevel === 'viewer';
+    }
+
+    getRange() {
+        return territoryData.getServiceYearRange(this.serviceYear);
+    }
+
+    /**
+     * Fill the service year dropdown from the years present in the data
+     */
+    populateServiceYears() {
+        const select = document.getElementById('sheetServiceYear');
+        if (!select || !app) return;
+
+        const years = app.getServiceYears().filter(y => !y.future);
+        select.innerHTML = years.map(y =>
+            `<option value="${y.value}">${y.label}${y.current ? ' (Current)' : ''}</option>`
+        ).join('');
+
+        const preferred = years.some(y => y.value === this.serviceYear)
+            ? this.serviceYear
+            : (years.find(y => y.current) || years[0] || {}).value;
+
+        if (preferred) {
+            select.value = preferred;
+            this.serviceYear = preferred;
+        }
     }
 
     /**
@@ -61,6 +92,13 @@ class TerritorySheet {
         document.getElementById('sheetSearch')?.addEventListener('input', (e) => {
             this.search = e.target.value.trim().toLowerCase();
             this.renderBody();
+            app?.syncUrl();
+        });
+
+        document.getElementById('sheetServiceYear')?.addEventListener('change', (e) => {
+            this.serviceYear = e.target.value;
+            this.refresh();
+            app?.syncUrl();
         });
 
         document.getElementById('sheetClearFilters')?.addEventListener('click', () => {
@@ -69,6 +107,7 @@ class TerritorySheet {
             const searchInput = document.getElementById('sheetSearch');
             if (searchInput) searchInput.value = '';
             this.render();
+            app?.syncUrl();
         });
 
         document.getElementById('sheetAddTerritoryBtn')?.addEventListener('click', () => {
@@ -98,13 +137,8 @@ class TerritorySheet {
         this.body?.addEventListener('change', (e) => {
             const input = e.target.closest('[data-cell-key]');
             if (!input) return;
-            this.saveCell(parseInt(input.dataset.territoryId, 10), input.dataset.cellKey, input.value);
-        });
-
-        // Keep the empty-date styling in sync while typing
-        this.body?.addEventListener('input', (e) => {
-            const input = e.target.closest('input[type="date"][data-cell-key]');
-            if (input) input.classList.toggle('is-empty', !input.value);
+            const value = input.type === 'checkbox' ? input.checked : input.value;
+            this.saveCell(parseInt(input.dataset.territoryId, 10), input.dataset.cellKey, value);
         });
 
         // Enter commits and moves focus down the column
@@ -130,10 +164,41 @@ class TerritorySheet {
                 return;
             }
 
-            // Clicking anywhere else on a row opens its history
-            if (e.target.closest('input, select, button, a')) return;
+            // Clicking anywhere else on a row opens its details
+            if (e.target.closest('input, select, button, a, label')) return;
             const tr = e.target.closest('tr[data-territory-id]');
             if (tr) this.showHistory(parseInt(tr.dataset.territoryId, 10));
+        });
+
+        // Details panel actions
+        this.panelContent?.addEventListener('change', (e) => {
+            const toggle = e.target.closest('[data-panel-personal]');
+            if (toggle) this.setPersonal(parseInt(toggle.dataset.panelPersonal, 10), toggle.checked);
+        });
+
+        this.panelContent?.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-panel-action]');
+            if (!btn) return;
+            const id = parseInt(btn.dataset.territoryId, 10);
+
+            switch (btn.dataset.panelAction) {
+                case 'add-record':
+                    territoryMap?.openAssignmentModal(id);
+                    break;
+                case 'edit-record':
+                    territoryMap?.openAssignmentModal(id, parseInt(btn.dataset.assignmentId, 10));
+                    break;
+                case 'delete-record':
+                    this.deleteRecord(id, parseInt(btn.dataset.assignmentId, 10));
+                    break;
+                case 'edit-territory':
+                    app?.openTerritoryModal(id);
+                    break;
+                case 'show-map':
+                    app?.switchView('map');
+                    territoryMap?.highlightTerritory(id);
+                    break;
+            }
         });
 
         document.getElementById('closeSheetPanel')?.addEventListener('click', () => {
@@ -159,30 +224,15 @@ class TerritorySheet {
     // ------------------------------------------------------------------
 
     /**
-     * Flatten territories into sheet rows. The publisher/date columns reflect
-     * the most recent assignment record; older records stay in the history.
+     * Flatten territories into sheet rows for the selected service year.
      */
     buildRows() {
+        const range = this.getRange();
+
         return territoryData.getAllTerritories().map(t => {
-            const assignments = (t.assignments || []).slice().sort((a, b) =>
-                new Date(b.dateAssigned || 0) - new Date(a.dateAssigned || 0)
-            );
-            const latest = assignments[0] || null;
-
-            const completed = assignments
-                .filter(a => a.dateCompleted)
-                .sort((a, b) => new Date(b.dateCompleted) - new Date(a.dateCompleted));
-
+            const activity = territoryData.getServiceYearActivity(t, range);
+            const latest = activity.latest;
             const group = territoryData.getGroup(t.groupId !== undefined ? t.groupId : t.group);
-
-            let status;
-            if (!latest) {
-                status = 'Yet to start';
-            } else if (latest.dateAssigned && !latest.dateCompleted) {
-                status = 'In progress';
-            } else {
-                status = 'Completed';
-            }
 
             return {
                 id: t.id,
@@ -191,12 +241,13 @@ class TerritorySheet {
                 group: group ? group.name : (t.group || ''),
                 groupId: group ? group.id : null,
                 groupColor: group ? group.color : null,
-                status,
+                personal: territoryData.isPersonalTerritory(t) ? 'Personal' : 'Regular',
+                status: activity.status,
                 publisher: latest ? (latest.publisher || '') : '',
                 dateAssigned: latest ? (latest.dateAssigned || '') : '',
-                dateCompleted: latest ? (latest.dateCompleted || '') : '',
-                lastCompleted: completed.length ? completed[0].dateCompleted : '',
-                records: assignments.length,
+                dateCompleted: activity.lastCompleted,
+                lastCompletedIsEarlier: activity.lastCompletedIsEarlier,
+                records: activity.recordsInYear,
                 comments: t.description || '',
                 latestAssignmentId: latest ? latest.id : null
             };
@@ -249,7 +300,7 @@ class TerritorySheet {
         if (col.type === 'number') {
             return (a[key] || 0) - (b[key] || 0);
         }
-        if (col.type === 'date') {
+        if (col.type === 'date' || col.type === 'lastCompleted') {
             // Blanks always sort last so unworked territories don't hide the data
             if (!a[key] && !b[key]) return 0;
             if (!a[key]) return 1;
@@ -359,8 +410,27 @@ class TerritorySheet {
             </td>`;
         }
 
+        if (col.type === 'personal') {
+            const checked = row.personal === 'Personal';
+            if (this.readOnly) {
+                return `<td class="sheet-cell-readonly${stickyClass}">${checked ? 'Personal' : ''}</td>`;
+            }
+            return `<td class="sheet-cell-check${stickyClass}">
+                <label class="sheet-check" title="Mark as a personal territory">
+                    <input type="checkbox" ${checked ? 'checked' : ''} data-cell-key="personal" data-territory-id="${row.id}">
+                </label>
+            </td>`;
+        }
+
         if (col.type === 'number') {
             return `<td class="sheet-cell-readonly${stickyClass}">${row[col.key]}</td>`;
+        }
+
+        // Last completion on or before the selected year; * when it predates the year
+        if (col.type === 'lastCompleted') {
+            if (!row.dateCompleted) return `<td class="sheet-cell-readonly${stickyClass}"></td>`;
+            const earlier = row.lastCompletedIsEarlier;
+            return `<td class="sheet-cell-readonly${stickyClass}"${earlier ? ' title="Completed before the selected service year"' : ''}>${this.formatDate(row.dateCompleted)}${earlier ? '<span class="sheet-earlier-mark">*</span>' : ''}</td>`;
         }
 
         if (disabled) {
@@ -377,9 +447,13 @@ class TerritorySheet {
             const swatch = row.groupColor
                 ? `<span class="sheet-group-swatch" style="background: ${row.groupColor}"></span>`
                 : '';
+            const badge = row.personal === 'Personal'
+                ? '<span class="sheet-personal-badge" title="Personal territory">Personal</span>'
+                : '';
             return `<td class="sheet-cell${stickyClass}">
                 <div class="sheet-group-cell">${swatch}
                     <select class="sheet-input sheet-select" data-cell-key="group" data-territory-id="${row.id}">${options}</select>
+                    ${badge}
                 </div>
             </td>`;
         }
@@ -451,6 +525,9 @@ class TerritorySheet {
                 await territoryData.updateTerritory(territoryId, { [key]: value });
             } else if (key === 'comments') {
                 await territoryData.updateTerritory(territoryId, { description: value });
+            } else if (key === 'personal') {
+                await territoryData.updateTerritory(territoryId, { isPersonal: !!value });
+                if (territorySummary) territorySummary.render();
             } else if (key === 'group') {
                 const group = value ? territoryData.getGroup(parseInt(value, 10)) : null;
                 await territoryData.updateTerritory(territoryId, {
@@ -461,10 +538,29 @@ class TerritorySheet {
             }
 
             this.refreshRow(territoryId);
+            if (this.openPanelTerritoryId === territoryId) this.showHistory(territoryId);
         } catch (error) {
             console.error('Failed to save cell:', error);
             this.toast('Failed to save change', 'error');
             this.refreshRow(territoryId);
+        } finally {
+            this.internalEdit = false;
+        }
+    }
+
+    /**
+     * Flag or unflag a personal territory from the details panel
+     */
+    async setPersonal(territoryId, isPersonal) {
+        this.internalEdit = true;
+        try {
+            await territoryData.updateTerritory(territoryId, { isPersonal: !!isPersonal });
+            this.refreshRow(territoryId);
+            if (territorySummary) territorySummary.render();
+            this.toast(isPersonal ? 'Marked as personal territory' : 'Personal territory flag removed');
+        } catch (error) {
+            console.error('Failed to update personal flag:', error);
+            this.toast('Failed to save change', 'error');
         } finally {
             this.internalEdit = false;
         }
@@ -486,28 +582,159 @@ class TerritorySheet {
         }
     }
 
+    async deleteRecord(territoryId, assignmentId) {
+        if (!confirm('Delete this assignment record?')) return;
+
+        try {
+            await territoryData.deleteAssignment(territoryId, assignmentId);
+            this.toast('Record deleted');
+        } catch (error) {
+            console.error('Failed to delete record:', error);
+            this.toast('Failed to delete record', 'error');
+        }
+    }
+
     // ------------------------------------------------------------------
-    // History panel
+    // Details panel
     // ------------------------------------------------------------------
 
     /**
-     * Show the territory's full details and assignment history, using the
-     * same panel content as the map view.
+     * Show the territory's details, full assignment history and actions
      */
     showHistory(territoryId) {
         const territory = territoryData.getTerritory(territoryId);
         if (!territory || !this.detailsPanel || !this.panelContent) return;
 
-        this.panelContent.innerHTML = territoryMap
-            ? territoryMap.renderTerritoryDetails(territory)
-            : '<p class="panel-placeholder">Details unavailable</p>';
-
-        this.detailsPanel.classList.toggle('is-readonly', this.readOnly);
+        this.panelContent.innerHTML = this.renderDetails(territory);
         this.detailsPanel.classList.add('open');
         this.container?.classList.add('panel-open');
 
         this.openPanelTerritoryId = territoryId;
         this.highlightSelectedRow();
+    }
+
+    renderDetails(territory) {
+        const group = territoryData.getGroup(territory.groupId !== undefined ? territory.groupId : territory.group);
+        const groupName = group ? group.name : (territory.group || 'Unassigned');
+        const color = group ? group.color : '#ccc';
+        const isPersonal = territoryData.isPersonalTerritory(territory);
+        const range = this.getRange();
+        const activity = territoryData.getServiceYearActivity(territory, range);
+        const area = territory.polygon && territory.polygon.length >= 3
+            ? territoryData.formatArea(territoryData.calculateArea(territory.polygon))
+            : 'No boundary set';
+
+        return `
+            <div class="territory-detail">
+                <div class="territory-header">
+                    <div class="territory-number" style="background: ${color}">${this.escape(territory.number || territory.id)}</div>
+                    <div class="territory-info">
+                        <h3>${this.escape(territory.name || '')}</h3>
+                        <div class="territory-group">
+                            <span class="group-color" style="background: ${color}"></span>
+                            ${this.escape(groupName)}${isPersonal ? ' &middot; Personal Territory' : ''}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="assignment-section" style="padding-top: 0">
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <span class="info-label">${range.value}:</span>
+                            <span class="info-value">
+                                <span class="sheet-status-badge status-${activity.status.toLowerCase().replace(/\s+/g, '-')}">${activity.status}</span>
+                            </span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Area:</span>
+                            <span class="info-value">${area}</span>
+                        </div>
+                    </div>
+                </div>
+
+                ${this.readOnly ? '' : `
+                <div class="assignment-section">
+                    <label class="sheet-panel-toggle">
+                        <input type="checkbox" ${isPersonal ? 'checked' : ''} data-panel-personal="${territory.id}">
+                        <span>
+                            <strong>Personal territory</strong>
+                            <small>Left out of this group's totals in the Summary</small>
+                        </span>
+                    </label>
+                </div>
+                `}
+
+                ${territory.description ? `
+                <div class="assignment-section">
+                    <h4 class="section-title">Comments</h4>
+                    <p class="territory-description-text">${this.escape(territory.description)}</p>
+                </div>
+                ` : ''}
+
+                <div class="assignment-section">
+                    <h4 class="section-title">Assignment History</h4>
+                    <div class="assignment-records">${this.renderHistoryTable(territory)}</div>
+                    ${this.readOnly ? '' : `
+                        <button class="btn btn-primary btn-sm" style="margin-top: 12px;"
+                                data-panel-action="add-record" data-territory-id="${territory.id}">
+                            + Add Record
+                        </button>
+                    `}
+                </div>
+
+                <div class="assignment-section">
+                    <h4 class="section-title">Actions</h4>
+                    <div class="action-buttons">
+                        <button class="btn btn-secondary" data-panel-action="show-map" data-territory-id="${territory.id}">
+                            🗺️ Show on Map
+                        </button>
+                        ${this.readOnly ? '' : `
+                            <button class="btn btn-secondary" data-panel-action="edit-territory" data-territory-id="${territory.id}">
+                                ✏️ Edit Territory
+                            </button>
+                        `}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    renderHistoryTable(territory) {
+        const assignments = (territory.assignments || []).slice().sort((a, b) =>
+            new Date(b.dateAssigned || 0) - new Date(a.dateAssigned || 0)
+        );
+
+        if (!assignments.length) return '<p class="text-muted">No assignment records yet.</p>';
+
+        return `
+            <table class="records-table">
+                <thead>
+                    <tr>
+                        <th>Publisher</th>
+                        <th>Period</th>
+                        ${this.readOnly ? '' : '<th>Actions</th>'}
+                    </tr>
+                </thead>
+                <tbody>
+                    ${assignments.map(a => `
+                        <tr>
+                            <td>${this.escape(a.publisher || 'Unknown')}</td>
+                            <td>${this.formatDateShort(a.dateAssigned)}${a.dateCompleted ? ` - ${this.formatDateShort(a.dateCompleted)}` : ' - Present'}</td>
+                            ${this.readOnly ? '' : `
+                                <td>
+                                    <div class="record-actions">
+                                        <span class="action-icon" title="Edit record" data-panel-action="edit-record"
+                                              data-territory-id="${territory.id}" data-assignment-id="${a.id}">✏️</span>
+                                        <span class="action-icon" title="Delete record" data-panel-action="delete-record"
+                                              data-territory-id="${territory.id}" data-assignment-id="${a.id}">🗑️</span>
+                                    </div>
+                                </td>
+                            `}
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
     }
 
     closeHistory() {
@@ -572,6 +799,7 @@ class TerritorySheet {
 
         const selected = this.filters[key];
         const allChecked = !selected || !selected.size;
+        const isDate = col.type === 'date' || col.type === 'lastCompleted';
 
         const menu = document.createElement('div');
         menu.className = 'sheet-filter-menu';
@@ -590,7 +818,7 @@ class TerritorySheet {
                 ${values.map(v => `
                     <label class="sheet-menu-check" data-value="${this.escape(v)}">
                         <input type="checkbox" value="${this.escape(v)}" ${allChecked || selected.has(v) ? 'checked' : ''}>
-                        <span>${v === '' ? '(Blanks)' : (col.type === 'date' ? this.formatDate(v) : this.escape(v))}</span>
+                        <span>${v === '' ? '(Blanks)' : (isDate ? this.formatDate(v) : this.escape(v))}</span>
                     </label>
                 `).join('')}
             </div>
@@ -648,6 +876,7 @@ class TerritorySheet {
                 this.sort = { key, dir: btn.dataset.sort };
                 this.closeFilterMenu();
                 this.refresh();
+                app?.syncUrl();
             });
         });
 
@@ -655,6 +884,7 @@ class TerritorySheet {
             delete this.filters[key];
             this.closeFilterMenu();
             this.refresh();
+            app?.syncUrl();
         });
 
         menu.querySelector('[data-menu-action="apply"]')?.addEventListener('click', () => {
@@ -666,6 +896,7 @@ class TerritorySheet {
             }
             this.closeFilterMenu();
             this.refresh();
+            app?.syncUrl();
         });
     }
 
@@ -678,12 +909,19 @@ class TerritorySheet {
     /**
      * Apply a filter set from outside (e.g. drilling in from the Summary view)
      * @param {Object} filters - map of column key -> array of values
+     * @param {string|null} serviceYear - service year to switch the sheet to
      */
-    applyExternalFilter(filters) {
+    applyExternalFilter(filters, serviceYear = null) {
         this.filters = {};
         Object.entries(filters || {}).forEach(([key, values]) => {
             if (values && values.length) this.filters[key] = new Set(values);
         });
+
+        if (serviceYear) {
+            this.serviceYear = serviceYear;
+            const select = document.getElementById('sheetServiceYear');
+            if (select) select.value = serviceYear;
+        }
 
         this.search = '';
         const searchInput = document.getElementById('sheetSearch');
@@ -699,6 +937,52 @@ class TerritorySheet {
             this.sort = { key, dir: 'asc' };
         }
         this.refresh();
+        app?.syncUrl();
+    }
+
+    // ------------------------------------------------------------------
+    // URL state
+    // ------------------------------------------------------------------
+
+    writeUrlParams(params) {
+        if (this.serviceYear) params.set('year', this.serviceYear);
+        if (this.search) params.set('q', this.search);
+        if (this.sort.key !== 'number' || this.sort.dir !== 'asc') {
+            params.set('sort', `${this.sort.key}:${this.sort.dir}`);
+        }
+        Object.entries(this.filters).forEach(([key, values]) => {
+            if (values && values.size) params.set(`f.${key}`, [...values].join('|'));
+        });
+    }
+
+    readUrlParams(params) {
+        const year = params.get('year');
+        if (year) {
+            this.serviceYear = year;
+            const select = document.getElementById('sheetServiceYear');
+            if (select) select.value = year;
+        }
+
+        const q = params.get('q');
+        if (q) {
+            this.search = q.toLowerCase();
+            const input = document.getElementById('sheetSearch');
+            if (input) input.value = q;
+        }
+
+        const sort = params.get('sort');
+        if (sort && sort.includes(':')) {
+            const [key, dir] = sort.split(':');
+            if (this.columns.some(c => c.key === key)) {
+                this.sort = { key, dir: dir === 'desc' ? 'desc' : 'asc' };
+            }
+        }
+
+        this.filters = {};
+        this.columns.forEach(col => {
+            const value = params.get(`f.${col.key}`);
+            if (value !== null) this.filters[col.key] = new Set(value.split('|'));
+        });
     }
 
     // ------------------------------------------------------------------
@@ -718,7 +1002,7 @@ class TerritorySheet {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `territory_sheet_${new Date().toISOString().split('T')[0]}.csv`;
+        a.download = `territory_sheet_${this.getRange().value}.csv`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -736,6 +1020,13 @@ class TerritorySheet {
         const date = new Date(dateStr);
         if (isNaN(date)) return this.escape(dateStr);
         return date.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+
+    formatDateShort(dateStr) {
+        if (!dateStr) return '';
+        const date = new Date(dateStr);
+        if (isNaN(date)) return this.escape(dateStr);
+        return date.toLocaleDateString('en-IN', { year: '2-digit', month: 'short', day: 'numeric' });
     }
 
     escape(value) {

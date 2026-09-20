@@ -66,6 +66,9 @@ class App {
             this.populateGroupSelects();
             this.setupMapServiceYear();
 
+            // Restore view, filters and service years from the URL
+            this.readUrl();
+
             // Add data change listener
             territoryData.addListener((event, data) => {
                 this.handleDataChange(event, data);
@@ -241,6 +244,7 @@ class App {
                 territoryMap.setColorMode(e.target.value);
             }
             this.toggleMapServiceYear(e.target.value);
+            this.syncUrl();
         });
 
         // Map service year (timeline coloring)
@@ -248,6 +252,7 @@ class App {
             if (territoryMap) {
                 territoryMap.setServiceYear(e.target.value);
             }
+            this.syncUrl();
         });
 
         // Map layer (Simple vs Earth)
@@ -499,6 +504,7 @@ class App {
      */
     switchView(view) {
         this.currentView = view;
+        this.syncUrl();
 
         // Update nav buttons
         document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -1130,6 +1136,88 @@ class App {
         const currentYear = years.find(y => y.current);
         if (currentYear) {
             this.renderReport(currentYear.value);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // URL state - the open tab and its filters survive a reload
+    // ------------------------------------------------------------------
+
+    /**
+     * Write the current view and each module's filters into the query string
+     */
+    syncUrl() {
+        if (!this.isInitialized || this.isReadingUrl) return;
+
+        const params = new URLSearchParams();
+        params.set('view', this.currentView);
+
+        const mapGroup = document.getElementById('groupFilter')?.value;
+        if (mapGroup && mapGroup !== 'all') params.set('mapGroup', mapGroup);
+
+        const colorMode = document.getElementById('colorModeFilter')?.value;
+        if (colorMode && colorMode !== 'group') params.set('color', colorMode);
+
+        const mapYear = document.getElementById('mapServiceYear')?.value;
+        if (mapYear && colorMode === 'timeline') params.set('mapYear', mapYear);
+
+        territorySheet?.writeUrlParams(params);
+        territorySummary?.writeUrlParams(params);
+
+        const query = params.toString();
+        history.replaceState(null, '', query ? `${location.pathname}?${query}` : location.pathname);
+    }
+
+    /**
+     * Restore the view and filters recorded in the query string
+     */
+    readUrl() {
+        const params = new URLSearchParams(location.search);
+        if (![...params.keys()].length) return;
+
+        this.isReadingUrl = true;
+
+        try {
+            const mapGroup = params.get('mapGroup');
+            if (mapGroup) {
+                const select = document.getElementById('groupFilter');
+                if (select) {
+                    select.value = mapGroup;
+                    if (select.value === mapGroup) territoryMap?.setFilter(mapGroup);
+                }
+            }
+
+            const colorMode = params.get('color');
+            if (colorMode) {
+                const select = document.getElementById('colorModeFilter');
+                if (select) select.value = colorMode;
+                territoryMap?.setColorMode(colorMode);
+                this.toggleMapServiceYear(colorMode);
+            }
+
+            const mapYear = params.get('mapYear');
+            if (mapYear) {
+                const select = document.getElementById('mapServiceYear');
+                if (select) select.value = mapYear;
+                territoryMap?.setServiceYear(mapYear);
+            }
+
+            territorySheet?.readUrlParams(params);
+            territorySummary?.readUrlParams(params);
+        } finally {
+            this.isReadingUrl = false;
+        }
+
+        const view = params.get('view');
+        const known = ['map', 'list', 'sheet', 'summary', 'editor', 'report', 'groups'];
+
+        // Viewers have no editor or groups tab
+        const blocked = this.accessLevel === 'viewer' && (view === 'editor' || view === 'groups');
+
+        if (view && known.includes(view) && !blocked) {
+            this.switchView(view);
+        } else {
+            this.syncUrl();
         }
     }
 
