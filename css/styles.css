@@ -3382,3 +3382,17 @@ th.sheet-sticky-col {
     border-style: solid;
     color: var(--color-primary-dark);
 }
+
+.viewer-badge {
+    padding: 3px 10px;
+    background: var(--color-bg-warm);
+    border: 1px solid var(--color-border-dark);
+    border-radius: var(--radius-full);
+    color: var(--color-text-light);
+    font-family: var(--font-sans);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    cursor: help;
+}

@@ -214,6 +214,17 @@ class App {
             // Hide Add Territory buttons in list and sheet views
             document.getElementById('addTerritoryBtn')?.style.setProperty('display', 'none');
             document.getElementById('sheetAddTerritoryBtn')?.style.setProperty('display', 'none');
+
+            // Say so plainly, otherwise missing edit controls look like a bug
+            const actions = document.querySelector('.header-actions');
+            if (actions && !document.getElementById('viewerBadge')) {
+                const badge = document.createElement('span');
+                badge.id = 'viewerBadge';
+                badge.className = 'viewer-badge';
+                badge.title = 'Signed in with the view-only password. Log out and sign in again to edit.';
+                badge.textContent = 'View only';
+                actions.prepend(badge);
+            }
         }
     }
 

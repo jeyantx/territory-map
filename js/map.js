@@ -352,32 +352,38 @@ class TerritoryMap {
                             <h3>${assignedTerritory.name}</h3>
                             <span class="territory-group">
                                 <span class="group-color" style="background: ${color}"></span>
-                                ${assignedTerritory.group}
+                                ${assignedTerritory.group}${territoryData.isPersonalTerritory(assignedTerritory) ? ' &middot; Personal Territory' : ''}
                             </span>
                         </div>
                     </div>
-                    
+
+                    ${this.renderPersonalToggle(assignedTerritory)}
+
                     <div class="assignment-section">
                         <h4 class="section-title">Assignment History</h4>
                         <div class="assignment-records" id="assignmentHistory">
                             ${this.renderAssignmentHistory(assignedTerritory)}
                         </div>
-                        <button class="btn btn-primary btn-sm" style="margin-top: 12px;" onclick="territoryMap.showAddAssignmentForm(${assignedTerritory.id})">
-                            + Add Record
-                        </button>
+                        ${this.readOnly ? '' : `
+                            <button class="btn btn-primary btn-sm" style="margin-top: 12px;" onclick="territoryMap.showAddAssignmentForm(${assignedTerritory.id})">
+                                + Add Record
+                            </button>
+                        `}
                     </div>
 
-                    <div class="assignment-section">
-                        <h4 class="section-title">Actions</h4>
-                        <div class="action-buttons">
-                            <button class="btn btn-secondary" onclick="territoryMap.editRegionInEditor(${region.regionId})">
-                                ✏️ Edit Boundary
-                            </button>
-                            <button class="btn btn-secondary" onclick="territoryMap.unassignRegion(${region.regionId})">
-                                Unassign
-                            </button>
+                    ${this.readOnly ? '' : `
+                        <div class="assignment-section">
+                            <h4 class="section-title">Actions</h4>
+                            <div class="action-buttons">
+                                <button class="btn btn-secondary" onclick="territoryMap.editRegionInEditor(${region.regionId})">
+                                    ✏️ Edit Boundary
+                                </button>
+                                <button class="btn btn-secondary" onclick="territoryMap.unassignRegion(${region.regionId})">
+                                    Unassign
+                                </button>
+                            </div>
                         </div>
-                    </div>
+                    `}
                 </div>
             `;
         } else {
@@ -414,32 +420,34 @@ class TerritoryMap {
                         </div>
                     </div>
                     
-                    <div class="assignment-section">
-                        <h4 class="section-title">Assign to Territory</h4>
-                        <div class="form-group">
-                            <select id="assignTerritorySelect" class="form-select">
-                                <option value="">Select territory...</option>
-                                ${unassignedTerritories.map(t => `
-                                    <option value="${t.id}">${t.id} - ${t.name} (${t.group})</option>
-                                `).join('')}
-                            </select>
-                        </div>
-                        <button class="btn btn-primary" onclick="territoryMap.assignSelectedTerritory(${region.regionId})">
-                            Assign
-                        </button>
-                    </div>
-                    
-                    <div class="assignment-section">
-                        <h4 class="section-title">Actions</h4>
-                        <div class="action-buttons">
-                            <button class="btn btn-secondary" onclick="territoryMap.editRegionInEditor(${region.regionId})">
-                                ✏️ Edit Boundary
-                            </button>
-                            <button class="btn btn-danger" onclick="territoryMap.deleteRegion(${region.regionId})">
-                                🗑️ Delete Region
+                    ${this.readOnly ? '' : `
+                        <div class="assignment-section">
+                            <h4 class="section-title">Assign to Territory</h4>
+                            <div class="form-group">
+                                <select id="assignTerritorySelect" class="form-select">
+                                    <option value="">Select territory...</option>
+                                    ${unassignedTerritories.map(t => `
+                                        <option value="${t.id}">${t.id} - ${t.name} (${t.group})</option>
+                                    `).join('')}
+                                </select>
+                            </div>
+                            <button class="btn btn-primary" onclick="territoryMap.assignSelectedTerritory(${region.regionId})">
+                                Assign
                             </button>
                         </div>
-                    </div>
+
+                        <div class="assignment-section">
+                            <h4 class="section-title">Actions</h4>
+                            <div class="action-buttons">
+                                <button class="btn btn-secondary" onclick="territoryMap.editRegionInEditor(${region.regionId})">
+                                    ✏️ Edit Boundary
+                                </button>
+                                <button class="btn btn-danger" onclick="territoryMap.deleteRegion(${region.regionId})">
+                                    🗑️ Delete Region
+                                </button>
+                            </div>
+                        </div>
+                    `}
                 </div>
             `;
         }
@@ -527,6 +535,52 @@ class TerritoryMap {
     }
 
     /**
+     * Viewers can look at everything but change nothing
+     */
+    get readOnly() {
+        return typeof app !== 'undefined' && app && app.accessLevel === 'viewer';
+    }
+
+    /**
+     * Checkbox that marks a territory as personal (kept out of group totals)
+     */
+    renderPersonalToggle(territory) {
+        if (this.readOnly) return '';
+        const checked = territoryData.isPersonalTerritory(territory) ? 'checked' : '';
+        return `
+            <div class="assignment-section">
+                <label class="sheet-panel-toggle">
+                    <input type="checkbox" ${checked}
+                           onchange="territoryMap.togglePersonal(${territory.id}, this.checked)">
+                    <span>
+                        <strong>Personal territory</strong>
+                        <small>Left out of this group's totals in the Summary</small>
+                    </span>
+                </label>
+            </div>
+        `;
+    }
+
+    /**
+     * Flag or unflag a personal territory
+     */
+    async togglePersonal(territoryId, isPersonal) {
+        try {
+            await territoryData.updateTerritory(territoryId, { isPersonal: !!isPersonal });
+            this.showToast(isPersonal ? 'Marked as personal territory' : 'Personal territory flag removed');
+
+            const region = territoryData.getExtractedRegions().find(r => r.assignedTerritoryId === territoryId);
+            if (region) this.showRegionDetails(region);
+            else this.showTerritoryDetailsPanel(territoryData.getTerritory(territoryId));
+
+            if (territorySummary) territorySummary.render();
+        } catch (error) {
+            console.error('Failed to update personal flag:', error);
+            this.showToast('Failed to save change');
+        }
+    }
+
+    /**
      * Render assignment history table
      */
     renderAssignmentHistory(territory) {
@@ -544,7 +598,7 @@ class TerritoryMap {
                     <tr>
                         <th>Publisher</th>
                         <th>Period</th>
-                        <th>Actions</th>
+                        ${this.readOnly ? '' : '<th>Actions</th>'}
                     </tr>
                 </thead>
                 <tbody>
@@ -552,12 +606,14 @@ class TerritoryMap {
                         <tr>
                             <td>${a.publisher || 'Unknown'}</td>
                             <td>${this.formatDateShort(a.dateAssigned)}${a.dateCompleted ? ` - ${this.formatDateShort(a.dateCompleted)}` : ' - Present'}</td>
-                            <td>
-                                <div class="record-actions">
-                                    <span class="action-icon" onclick="territoryMap.showEditAssignmentForm(${territory.id}, ${a.id})">✏️</span>
-                                    <span class="action-icon" onclick="territoryMap.deleteAssignment(${territory.id}, ${a.id})">🗑️</span>
-                                </div>
-                            </td>
+                            ${this.readOnly ? '' : `
+                                <td>
+                                    <div class="record-actions">
+                                        <span class="action-icon" onclick="territoryMap.showEditAssignmentForm(${territory.id}, ${a.id})">✏️</span>
+                                        <span class="action-icon" onclick="territoryMap.deleteAssignment(${territory.id}, ${a.id})">🗑️</span>
+                                    </div>
+                                </td>
+                            `}
                         </tr>
                     `).join('')}
                 </tbody>
@@ -1302,7 +1358,7 @@ class TerritoryMap {
                         <h3>${territory.name}</h3>
                         <div class="territory-group">
                             <span class="group-color" style="background: ${color}"></span>
-                            ${groupName}
+                            ${groupName}${territoryData.isPersonalTerritory(territory) ? ' &middot; Personal Territory' : ''}
                         </div>
                     </div>
                 </div>
@@ -1316,6 +1372,8 @@ class TerritoryMap {
                     </div>
                 </div>
 
+                ${this.renderPersonalToggle(territory)}
+
                 ${territory.description ? `
                 <div class="assignment-section">
                     <h4 class="section-title">Description</h4>
@@ -1328,19 +1386,23 @@ class TerritoryMap {
                     <div class="assignment-records">
                         ${this.renderAssignmentHistory(territory)}
                     </div>
-                    <button class="btn btn-primary btn-sm" style="margin-top: 12px;" onclick="territoryMap.showAddAssignmentForm(${territory.id})">
-                        + Add Record
-                    </button>
+                    ${this.readOnly ? '' : `
+                        <button class="btn btn-primary btn-sm" style="margin-top: 12px;" onclick="territoryMap.showAddAssignmentForm(${territory.id})">
+                            + Add Record
+                        </button>
+                    `}
                 </div>
 
-                <div class="assignment-section">
-                    <h4 class="section-title">Actions</h4>
-                    <div class="action-buttons">
-                        <button class="btn btn-secondary" onclick="app.openTerritoryModal(${territory.id})">
-                            ✏️ Edit Territory
-                        </button>
+                ${this.readOnly ? '' : `
+                    <div class="assignment-section">
+                        <h4 class="section-title">Actions</h4>
+                        <div class="action-buttons">
+                            <button class="btn btn-secondary" onclick="app.openTerritoryModal(${territory.id})">
+                                ✏️ Edit Territory
+                            </button>
+                        </div>
                     </div>
-                </div>
+                `}
             </div>
         `;
     }
