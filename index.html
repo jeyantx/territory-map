@@ -294,8 +294,8 @@
             </div>
             <div class="sheet-hint">
                 Click a column header to sort, or the funnel icon to filter by value. Edits save automatically.
-                The <strong>Assigned To</strong> and date columns edit each territory's latest record &mdash;
-                use <strong>＋</strong> to start a new one.
+                Click any row to see its full assignment history &mdash; use <strong>Edit</strong> to change the
+                latest record, or <strong>+ New</strong> to add one.
             </div>
             <div class="sheet-table-wrapper" id="sheetTableWrapper">
                 <table class="sheet-table">
@@ -303,6 +303,22 @@
                     <tbody id="sheetBody"></tbody>
                 </table>
             </div>
+
+            <!-- Territory history panel (same details as the map view) -->
+            <aside class="details-panel sheet-details-panel" id="sheetDetailsPanel">
+                <div class="panel-header">
+                    <h2 class="panel-title">Territory Details</h2>
+                    <button class="close-panel" id="closeSheetPanel">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                <div class="panel-content" id="sheetPanelContent">
+                    <p class="panel-placeholder">Click a row to view its assignment history</p>
+                </div>
+            </aside>
         </section>
 
         <!-- Summary View -->

@@ -16,16 +16,17 @@ class TerritorySheet {
 
         this.openMenuKey = null;
         this.internalEdit = false;
+        this.openPanelTerritoryId = null;
 
         this.columns = [
             { key: 'number', label: 'Map No', width: 90, type: 'text', editable: true, sticky: true },
             { key: 'name', label: 'Territory Name', width: 220, type: 'text', editable: true },
             { key: 'group', label: 'Group', width: 170, type: 'group', editable: true },
             { key: 'status', label: 'Status', width: 130, type: 'status', editable: false },
-            { key: 'publisher', label: 'Assigned To', width: 170, type: 'text', editable: true },
-            { key: 'dateAssigned', label: 'Date Checked Out', width: 150, type: 'date', editable: true },
-            { key: 'dateCompleted', label: 'Date Checked In', width: 150, type: 'date', editable: true },
-            { key: 'lastCompleted', label: 'Last Completed', width: 140, type: 'date', editable: false },
+            { key: 'publisher', label: 'Last Assigned To', width: 170, type: 'text', editable: false },
+            { key: 'dateAssigned', label: 'Date Last Started', width: 150, type: 'date', editable: false },
+            { key: 'dateCompleted', label: 'Date Last Completed', width: 160, type: 'date', editable: false },
+            { key: 'lastCompleted', label: 'Last Completed (any)', width: 155, type: 'date', editable: false },
             { key: 'records', label: 'Records', width: 80, type: 'number', editable: false },
             { key: 'comments', label: 'Comments', width: 260, type: 'text', editable: true }
         ];
@@ -42,6 +43,8 @@ class TerritorySheet {
 
         this.body = document.getElementById('sheetBody');
         this.head = document.getElementById('sheetHead');
+        this.detailsPanel = document.getElementById('sheetDetailsPanel');
+        this.panelContent = document.getElementById('sheetPanelContent');
 
         this.setupEventListeners();
         this.render();
@@ -114,20 +117,27 @@ class TerritorySheet {
             this.focusNextInColumn(input);
         });
 
-        // Row actions
+        // Row actions and row selection
         this.body?.addEventListener('click', (e) => {
             const btn = e.target.closest('.sheet-row-btn');
-            if (!btn) return;
-            const id = parseInt(btn.dataset.territoryId, 10);
-
-            if (btn.dataset.action === 'add-record' && territoryMap) {
-                territoryMap.openAssignmentModal(id);
-            } else if (btn.dataset.action === 'show-map' && app) {
-                app.switchView('map');
-                if (territoryMap) territoryMap.highlightTerritory(id);
-            } else if (btn.dataset.action === 'edit' && app) {
-                app.openTerritoryModal(id);
+            if (btn) {
+                const id = parseInt(btn.dataset.territoryId, 10);
+                if (btn.dataset.action === 'edit-record') {
+                    this.editLatestRecord(id);
+                } else if (btn.dataset.action === 'add-record' && territoryMap) {
+                    territoryMap.openAssignmentModal(id);
+                }
+                return;
             }
+
+            // Clicking anywhere else on a row opens its history
+            if (e.target.closest('input, select, button, a')) return;
+            const tr = e.target.closest('tr[data-territory-id]');
+            if (tr) this.showHistory(parseInt(tr.dataset.territoryId, 10));
+        });
+
+        document.getElementById('closeSheetPanel')?.addEventListener('click', () => {
+            this.closeHistory();
         });
 
         // Close the filter menu on outside click / Escape
@@ -138,7 +148,9 @@ class TerritorySheet {
         });
 
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && this.openMenuKey) this.closeFilterMenu();
+            if (e.key !== 'Escape') return;
+            if (this.openMenuKey) this.closeFilterMenu();
+            else if (this.openPanelTerritoryId) this.closeHistory();
         });
     }
 
@@ -319,17 +331,17 @@ class TerritorySheet {
         const actions = this.readOnly ? '' : `
             <td class="sheet-actions-col">
                 <div class="sheet-row-actions">
-                    <button class="sheet-row-btn" data-action="add-record" data-territory-id="${row.id}"
-                            title="Add a new assignment record">＋</button>
-                    <button class="sheet-row-btn" data-action="show-map" data-territory-id="${row.id}"
-                            title="Show on map">◎</button>
-                    <button class="sheet-row-btn" data-action="edit" data-territory-id="${row.id}"
-                            title="Open full editor">✎</button>
+                    <button class="sheet-row-btn" data-action="edit-record" data-territory-id="${row.id}"
+                            title="Edit the latest record">Edit</button>
+                    <button class="sheet-row-btn primary" data-action="add-record" data-territory-id="${row.id}"
+                            title="Add a new record">+ New</button>
                 </div>
             </td>
         `;
 
-        return `<tr data-territory-id="${row.id}">
+        const selected = this.openPanelTerritoryId === row.id ? ' class="is-selected"' : '';
+
+        return `<tr data-territory-id="${row.id}"${selected}>
             <td class="sheet-rownum-col">${rowNumber}</td>
             ${cells}
             ${actions}
@@ -405,6 +417,9 @@ class TerritorySheet {
             wrapper.scrollTop = scrollTop;
             wrapper.scrollLeft = scrollLeft;
         }
+
+        // Records may have changed while the panel was open
+        if (this.openPanelTerritoryId) this.showHistory(this.openPanelTerritoryId);
     }
 
     /**
@@ -443,9 +458,6 @@ class TerritorySheet {
                     group: group ? group.name : ''
                 });
                 if (territoryMap) territoryMap.render();
-            } else if (key === 'publisher' || key === 'dateAssigned' || key === 'dateCompleted') {
-                await this.saveAssignmentField(territory, key, value);
-                if (territoryMap) territoryMap.render();
             }
 
             this.refreshRow(territoryId);
@@ -459,30 +471,56 @@ class TerritorySheet {
     }
 
     /**
-     * Publisher and date columns edit the most recent assignment record.
-     * If the territory has no record yet, the edit starts one.
+     * Open the assignment modal on this territory's most recent record.
+     * Territories without a record yet start a new one instead.
      */
-    async saveAssignmentField(territory, key, value) {
-        const assignments = (territory.assignments || []).slice().sort((a, b) =>
-            new Date(b.dateAssigned || 0) - new Date(a.dateAssigned || 0)
-        );
-        const latest = assignments[0] || null;
+    editLatestRecord(territoryId) {
+        if (!territoryMap) return;
 
-        if (latest) {
-            await territoryData.updateAssignment(territory.id, latest.id, { [key]: value || null });
-            return;
+        const row = this.buildRows().find(r => r.id === territoryId);
+        if (row && row.latestAssignmentId) {
+            territoryMap.openAssignmentModal(territoryId, row.latestAssignmentId);
+        } else {
+            this.toast('No record yet - adding the first one', 'info');
+            territoryMap.openAssignmentModal(territoryId);
         }
+    }
 
-        if (!value) return; // Nothing to record yet
+    // ------------------------------------------------------------------
+    // History panel
+    // ------------------------------------------------------------------
 
-        const record = {
-            publisher: '',
-            dateAssigned: new Date().toISOString().split('T')[0],
-            dateCompleted: null,
-            [key]: value
-        };
-        await territoryData.addAssignment(territory.id, record);
-        this.toast('New record created for this territory');
+    /**
+     * Show the territory's full details and assignment history, using the
+     * same panel content as the map view.
+     */
+    showHistory(territoryId) {
+        const territory = territoryData.getTerritory(territoryId);
+        if (!territory || !this.detailsPanel || !this.panelContent) return;
+
+        this.panelContent.innerHTML = territoryMap
+            ? territoryMap.renderTerritoryDetails(territory)
+            : '<p class="panel-placeholder">Details unavailable</p>';
+
+        this.detailsPanel.classList.toggle('is-readonly', this.readOnly);
+        this.detailsPanel.classList.add('open');
+        this.container?.classList.add('panel-open');
+
+        this.openPanelTerritoryId = territoryId;
+        this.highlightSelectedRow();
+    }
+
+    closeHistory() {
+        this.detailsPanel?.classList.remove('open');
+        this.container?.classList.remove('panel-open');
+        this.openPanelTerritoryId = null;
+        this.highlightSelectedRow();
+    }
+
+    highlightSelectedRow() {
+        this.body?.querySelectorAll('tr').forEach(tr => {
+            tr.classList.toggle('is-selected', parseInt(tr.dataset.territoryId, 10) === this.openPanelTerritoryId);
+        });
     }
 
     /**

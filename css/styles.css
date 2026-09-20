@@ -2816,8 +2816,8 @@ th.sheet-sticky-col {
 }
 
 .sheet-actions-col {
-    width: 110px;
-    min-width: 110px;
+    width: 140px;
+    min-width: 140px;
     text-align: center !important;
 }
 
@@ -2825,18 +2825,21 @@ th.sheet-sticky-col {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 2px;
+    gap: var(--spacing-xs);
+    padding: 0 var(--spacing-xs);
 }
 
 .sheet-row-btn {
-    width: 26px;
-    height: 26px;
-    background: transparent;
+    padding: 3px 9px;
+    background: var(--color-bg);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-sm);
     color: var(--color-text-light);
-    font-size: 0.8125rem;
-    line-height: 1;
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.4;
+    white-space: nowrap;
     cursor: pointer;
     transition: all var(--transition-fast);
 }
@@ -2845,6 +2848,40 @@ th.sheet-sticky-col {
     background: var(--color-primary);
     border-color: var(--color-primary);
     color: var(--color-text-inverse);
+}
+
+.sheet-row-btn.primary {
+    border-color: var(--color-accent-dark);
+    color: var(--color-primary-dark);
+}
+
+/* Read-only cells open the history panel on click */
+.sheet-cell-readonly,
+.sheet-cell-status {
+    cursor: pointer;
+}
+
+/* Opaque, so the frozen columns keep covering the scrolled cells */
+.sheet-table tbody tr.is-selected td {
+    background: #EFE5D7;
+}
+
+.sheet-table tbody tr.is-selected .sheet-rownum-col {
+    background: #E4D7C4 !important;
+}
+
+.sheet-details-panel {
+    z-index: 50;
+}
+
+/* Keep the whole grid reachable while the history panel is open */
+.sheet-view.panel-open .sheet-table-wrapper {
+    margin-right: var(--sidebar-width);
+}
+
+.sheet-details-panel.is-readonly .record-actions,
+.sheet-details-panel.is-readonly .assignment-section .btn {
+    display: none;
 }
 
 .sheet-empty {
@@ -3238,5 +3275,28 @@ th.sheet-sticky-col {
     .summary-cards {
         grid-template-columns: 1fr;
         gap: var(--spacing-md);
+    }
+}
+
+@media (max-width: 768px) {
+    .sheet-details-panel {
+        top: auto;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        height: 70vh;
+        border-left: none;
+        border-top: 1px solid var(--color-border);
+        border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+        transform: translateY(100%);
+    }
+
+    .sheet-details-panel.open {
+        transform: translateY(0);
+    }
+
+    .sheet-view.panel-open .sheet-table-wrapper {
+        margin-right: 0;
     }
 }
