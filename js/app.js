@@ -46,6 +46,14 @@ class App {
             territoryEditor = new TerritoryEditor();
             territoryEditor.init();
 
+            // Initialize sheet
+            territorySheet = new TerritorySheet();
+            territorySheet.init();
+
+            // Initialize summary
+            territorySummary = new TerritorySummary();
+            territorySummary.init();
+
             // Apply access level restrictions
             this.applyAccessRestrictions();
 
@@ -64,6 +72,8 @@ class App {
                 if (event === 'groupsUpdated' || event === 'init') {
                     this.populateGroupSelects();
                     if (this.currentView === 'list') this.renderListView();
+                    if (this.currentView === 'sheet' && territorySheet) territorySheet.refresh();
+                    if (territorySummary) territorySummary.populateServiceYears();
                 }
             });
 
@@ -198,8 +208,9 @@ class App {
                 }
             });
 
-            // Hide Add Territory button in list view
+            // Hide Add Territory buttons in list and sheet views
             document.getElementById('addTerritoryBtn')?.style.setProperty('display', 'none');
+            document.getElementById('sheetAddTerritoryBtn')?.style.setProperty('display', 'none');
         }
     }
 
@@ -514,6 +525,12 @@ class App {
                 break;
             case 'list':
                 this.renderListView();
+                break;
+            case 'sheet':
+                if (territorySheet) territorySheet.refresh();
+                break;
+            case 'summary':
+                if (territorySummary) territorySummary.render();
                 break;
             case 'editor':
                 if (territoryEditor) {
@@ -988,6 +1005,12 @@ class App {
         if (this.currentView === 'map' && territoryMap) {
             territoryMap.render();
         }
+        if (this.currentView === 'sheet' && territorySheet) {
+            territorySheet.handleDataChange();
+        }
+        if (this.currentView === 'summary' && territorySummary) {
+            territorySummary.render();
+        }
     }
 
     /**
@@ -1006,6 +1029,10 @@ class App {
                     e.preventDefault();
                     break;
                 case '3':
+                    this.switchView('sheet');
+                    e.preventDefault();
+                    break;
+                case '4':
                     this.switchView('editor');
                     e.preventDefault();
                     break;
