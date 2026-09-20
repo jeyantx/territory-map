@@ -56,6 +56,7 @@ class App {
             // Render initial views
             this.renderListView();
             this.populateGroupSelects();
+            this.setupMapServiceYear();
 
             // Add data change listener
             territoryData.addListener((event, data) => {
@@ -227,6 +228,14 @@ class App {
         document.getElementById('colorModeFilter')?.addEventListener('change', (e) => {
             if (territoryMap) {
                 territoryMap.setColorMode(e.target.value);
+            }
+            this.toggleMapServiceYear(e.target.value);
+        });
+
+        // Map service year (timeline coloring)
+        document.getElementById('mapServiceYear')?.addEventListener('change', (e) => {
+            if (territoryMap) {
+                territoryMap.setServiceYear(e.target.value);
             }
         });
 
@@ -1098,6 +1107,41 @@ class App {
     }
 
     /**
+     * Populate the map's service year selector (used by timeline coloring)
+     */
+    setupMapServiceYear() {
+        const select = document.getElementById('mapServiceYear');
+        if (!select) return;
+
+        // Only past and current service years make sense for the map
+        const years = this.getServiceYears().filter(y => !y.future);
+        const previous = select.value;
+        select.innerHTML = years.map(year =>
+            `<option value="${year.value}">${year.label}${year.current ? ' (Current)' : ''}</option>`
+        ).join('');
+
+        const stillAvailable = years.some(y => y.value === previous);
+        const current = years.find(y => y.current);
+        select.value = stillAvailable ? previous : (current ? current.value : (years[0]?.value || ''));
+
+        if (territoryMap) {
+            territoryMap.setServiceYear(select.value);
+        }
+
+        this.toggleMapServiceYear(document.getElementById('colorModeFilter')?.value);
+    }
+
+    /**
+     * Show the map service year selector only in timeline color mode
+     */
+    toggleMapServiceYear(colorMode) {
+        const control = document.getElementById('mapServiceYearControl');
+        if (control) {
+            control.style.display = colorMode === 'timeline' ? '' : 'none';
+        }
+    }
+
+    /**
      * Get available service years
      */
     getServiceYears() {
@@ -1131,7 +1175,8 @@ class App {
             years.push({
                 value: `${startYear}-${endYear}`,
                 label: `${startYear} - ${endYear}`,
-                current: startYear === serviceYearStart
+                current: startYear === serviceYearStart,
+                future: startYear > serviceYearStart
             });
         }
 

@@ -24,6 +24,7 @@ class TerritoryMap {
         this.startY = 0;
         this.searchQuery = '';
         this.colorMode = 'group'; // 'group' or 'timeline'
+        this.serviceYear = null; // e.g. '2025-2026'; null = current service year
         this.mapLayer = 'simple'; // 'simple' or 'earth'
         this.currentFilter = 'all';
 
@@ -169,6 +170,36 @@ class TerritoryMap {
         this.colorMode = mode;
         this.render();
         this.updateLegend();
+    }
+
+    /**
+     * Set the service year used by timeline coloring and re-render
+     * @param {string|null} value - e.g. '2025-2026', or null for the current service year
+     */
+    setServiceYear(value) {
+        this.serviceYear = value || null;
+        if (this.colorMode === 'timeline') {
+            this.render();
+        }
+        this.updateLegend();
+    }
+
+    /**
+     * Get the start/end dates of the currently selected service year (Sep 1 - Aug 31)
+     */
+    getServiceYearRange() {
+        let startYear;
+        if (this.serviceYear) {
+            startYear = parseInt(String(this.serviceYear).split('-')[0], 10);
+        }
+        if (!startYear) {
+            const now = new Date();
+            startYear = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+        }
+        return {
+            start: new Date(startYear, 8, 1),
+            end: new Date(startYear + 1, 7, 31, 23, 59, 59)
+        };
     }
 
     /**
@@ -1329,25 +1360,41 @@ class TerritoryMap {
      */
     getTimelineColor(territory) {
         const assignments = territory.assignments || [];
+        const { start: serviceYearStart, end: serviceYearEnd } = this.getServiceYearRange();
 
-        // Ongoing (assigned but not yet completed) takes priority — show as yellow
-        const hasOngoing = assignments.some(a => a.dateAssigned && !a.dateCompleted);
+        // Evaluate the map as of the end of the selected service year (never in the future)
+        const now = new Date();
+        const refDate = now < serviceYearEnd ? now : serviceYearEnd;
+
+        // Only records that already existed by the reference date count
+        const relevant = assignments.filter(a => {
+            const assigned = a.dateAssigned ? new Date(a.dateAssigned) : null;
+            const completed = a.dateCompleted ? new Date(a.dateCompleted) : null;
+            return (assigned && assigned <= refDate) || (completed && completed <= refDate);
+        });
+
+        // Ongoing (assigned but not yet completed as of refDate) takes priority - show as yellow
+        const hasOngoing = relevant.some(a => {
+            if (!a.dateAssigned || new Date(a.dateAssigned) > refDate) return false;
+            return !a.dateCompleted || new Date(a.dateCompleted) > refDate;
+        });
         if (hasOngoing) return '#FDD835'; // Yellow (Ongoing)
 
-        const completed = assignments.filter(a => a.dateCompleted).map(a => new Date(a.dateCompleted)).sort((a, b) => b - a);
+        const completed = relevant
+            .filter(a => a.dateCompleted)
+            .map(a => new Date(a.dateCompleted))
+            .filter(d => d <= refDate)
+            .sort((a, b) => b - a);
 
         if (completed.length === 0) return '#C62828'; // Muted Dark Red (Never)
 
         const lastDate = completed[0];
-        const now = new Date();
-        const currentYear = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
-        const serviceYearStart = new Date(currentYear, 8, 1);
 
         if (lastDate >= serviceYearStart) {
-            const monthsAgo = (now.getFullYear() - lastDate.getFullYear()) * 12 + now.getMonth() - lastDate.getMonth();
+            const monthsAgo = (refDate.getFullYear() - lastDate.getFullYear()) * 12 + refDate.getMonth() - lastDate.getMonth();
             return monthsAgo <= 2 ? '#4CAF50' : '#A5D6A7'; // Pastel Green if < 2 months, else Muted Light Green
         } else {
-            const diffYears = (now - lastDate) / (1000 * 60 * 60 * 24 * 365);
+            const diffYears = (refDate - lastDate) / (1000 * 60 * 60 * 24 * 365);
             if (diffYears > 2) return '#D32F2F'; // Muted Red if > 2 years
             if (diffYears > 1) return '#E57373'; // Pastel Red if > 1 year
             return '#FFCDD2'; // Very Light Red
